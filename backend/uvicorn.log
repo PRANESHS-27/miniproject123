@@ -1,0 +1,121 @@
+INFO:     Started server process [32428]
+INFO:     Waiting for application startup.
+2026-08-13 15:35:55 | INFO    | vulnwatch | CVE index ready (219655 CVEs, 144 vendors)
+2026-08-13 15:35:55 | INFO    | scheduler | Scheduler disabled via ENABLE_SCHEDULER=false — staying dormant.
+2026-08-13 15:35:55 | INFO    | vulnwatch | VulnWatch backend started (env=development)
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:54518 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58018 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58018 - "POST /api/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58018 - "POST /api/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58018 - "POST /api/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58018 - "POST /api/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /api/ai/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53556 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53558 - "GET /api/ai/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54336 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64062 - "GET /api/vulnerabilities/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63786 - "GET /api/vulnerabilities/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61360 - "GET /api/ai/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58478 - "GET /api/ai/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49258 - "POST /api/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50235 - "POST /api/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56416 - "GET /api/admin/users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51312 - "PATCH /api/admin/users/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52505 - "GET /api/admin/users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61574 - "PATCH /api/admin/users/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59193 - "GET /api/admin/users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61495 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60715 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57799 - "POST /api/assets/10/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50515 - "GET /api/assets/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64953 - "GET /api/assets/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61177 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50427 - "POST /api/assets/10/scan HTTP/1.1" 409 Conflict
+INFO:     127.0.0.1:61796 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+2026-08-13 15:45:10 | INFO    | asset_scanner | Asset scan OK: id=10 url=https://www.bitsathy.ac.in techs=0 findings=4 cves=0
+INFO:     127.0.0.1:51914 - "GET /api/assets/10/cves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65253 - "GET /api/vulnerabilities/CVE-2026-16256 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63353 - "GET /api/assets/10/cves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60604 - "GET /api/assets/10/cves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63130 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52904 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63704 - "POST /api/assets/10/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49935 - "GET /api/assets/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55535 - "GET /api/assets/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62396 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50489 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+2026-08-13 15:47:18 | INFO    | asset_scanner | Asset scan OK: id=10 url=https://www.bitsathy.ac.in techs=0 findings=0 cves=0
+INFO:     127.0.0.1:61230 - "GET /api/assets/10/findings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60084 - "GET /api/assets/10/cves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65077 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61232 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52278 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60940 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53336 - "GET /api/assets/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55447 - "GET /api/assets/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64551 - "POST /api/assets/3/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61597 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61144 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54616 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53197 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59918 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65471 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57461 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59984 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60621 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54346 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58945 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57531 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51975 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64133 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49242 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+2026-08-13 15:49:20 | INFO    | asset_scanner | Asset scan OK: id=3 url=https://finance-teambucks.vercel.app techs=0 findings=5 cves=0
+INFO:     127.0.0.1:65036 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59168 - "GET /api/assets/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60136 - "GET /api/assets/3/findings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61839 - "GET /api/assets/3/cves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54563 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52795 - "POST /api/assets/3/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56621 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49212 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61223 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60498 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53255 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56184 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61896 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57326 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56600 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63639 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64883 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58886 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61903 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63596 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52349 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60340 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+2026-08-13 15:51:02 | INFO    | asset_scanner | Asset scan OK: id=3 url=https://finance-teambucks.vercel.app techs=0 findings=0 cves=0
+INFO:     127.0.0.1:54514 - "GET /api/assets/scans/recent?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53188 - "GET /api/assets/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54625 - "GET /api/assets/3/findings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58994 - "GET /api/vulnerabilities/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52203 - "GET /api/vulnerabilities/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63201 - "GET /api/vulnerabilities/CVE-2026-68750 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54726 - "GET /api/vulnerabilities/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58375 - "GET /api/vulnerabilities/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57552 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52683 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58664 - "GET /api/assets/14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49316 - "GET /api/assets/14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63614 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56481 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54697 - "GET /api/assets?include_inactive=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59152 - "GET /api/assets/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62470 - "GET /api/assets/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53900 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57361 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57362 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57367 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61617 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61618 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61620 - "GET /api/assets/scans/recent?limit=100 HTTP/1.1" 200 OK

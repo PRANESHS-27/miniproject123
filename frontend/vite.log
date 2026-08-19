@@ -1,0 +1,37 @@
+
+> vulnwatch-frontend@1.0.0 dev
+> vite
+
+Port 3000 is in use, trying another one...
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m998[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3001[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://10.153.176.145:[1m3001[22m/[39m
+[2m2:42:10 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AssetDetailPage.jsx, /src/styles/index.css[22m
+[2m2:53:26 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AssetDetailPage.jsx, /src/styles/index.css[22m
+[2m2:54:08 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AssetDetailPage.jsx, /src/styles/index.css[22m
+[2m3:16:01 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mtailwind.config.js[22m
+[2m3:17:14 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/styles/index.css[22m
+[2m3:18:44 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Spinner.jsx, /src/styles/index.css[22m
+[2m3:19:25 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Badge.jsx, /src/styles/index.css[22m
+[2m3:19:46 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/components/Badge.jsx[22m
+[2m3:20:10 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/EmptyState.jsx, /src/styles/index.css[22m
+[2m3:20:18 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/PageHeader.jsx, /src/styles/index.css[22m
+[2m3:20:29 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Stat.jsx, /src/styles/index.css[22m
+[2m4:06:43 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Tabs.jsx, /src/styles/index.css[22m
+[2m4:07:18 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Modal.jsx, /src/styles/index.css[22m
+[2m4:08:04 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.jsx, /src/styles/index.css[22m
+[2m4:09:56 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/UserMenu.jsx, /src/styles/index.css[22m
+[2m4:10:18 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ThemeToggle.jsx, /src/styles/index.css[22m
+[2m4:11:03 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/hooks/useApi.js[22m
+[2m4:11:19 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/DataTable.jsx, /src/styles/index.css[22m
+[2m4:11:54 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/components/Sidebar.jsx, /src/components/UserMenu.jsx, /src/components/RequireRole.jsx, /src/pages/AssetDetailPage.jsx, /src/pages/ReportsPage.jsx, /src/pages/DashboardPage.jsx, /src/pages/AssetsPage.jsx, /src/pages/AdminUsersPage.jsx[22m
+[2m4:12:13 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.jsx, /src/styles/index.css[22m
+[2m5:52:00 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.jsx, /src/styles/index.css[22m
+[2m5:53:17 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LoginPage.jsx, /src/styles/index.css[22m
+[2m5:53:56 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/SearchPage.jsx, /src/styles/index.css[22m
+[2m5:54:21 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/CveDetailPage.jsx, /src/styles/index.css[22m
+[2m5:55:04 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AiPage.jsx, /src/styles/index.css[22m
+[2m5:57:10 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AssetDetailPage.jsx, /src/styles/index.css[22m
+[2m5:57:48 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AssetsPage.jsx, /src/styles/index.css[22m

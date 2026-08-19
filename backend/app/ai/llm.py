@@ -1,0 +1,259 @@
+"""Lightweight LLM client — talks to Ollama, OpenAI, Gemini, or Groq.
+
+We deliberately avoid pulling in `openai` / `langchain` so the rest of the
+backend stays slim. All four providers expose either OpenAI-compatible or
+simple JSON HTTP APIs, so ``urllib`` (stdlib) is enough — and avoids a
+known Windows + httpx SSL issue where certifi roots aren't loaded by
+default. Resolution order at import time:
+
+1. ``settings.openai_api_key`` is set → use OpenAI
+2. ``settings.gemini_api_key`` is set → use Gemini
+3. ``settings.groq_api_key``   is set → use Groq
+4. ``settings.ollama_host``    is set → use Ollama
+5. Otherwise                              → SQL-only fallback
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import ssl
+import urllib.error
+import urllib.request
+from typing import Any
+
+from app.core.config import settings
+
+log = logging.getLogger(__name__)
+
+
+# Outbound HTTPS to LLM providers hits the same Windows + corporate-AV
+# problem as the NVD fetcher. We default to the certifi CA bundle (which
+# includes the standard public roots) and additionally load the local
+# ``certs/avast-root.pem`` if present — Avast's HTTPS shield intercepts
+# TLS on this machine and signs outbound traffic with its own root, which
+# Python's certifi bundle doesn't include.
+import certifi as _certifi
+
+_DEFAULT_CA = _certifi.where()
+
+# Repo-local PEM bundle (added at install time when corporate AV is
+# detected). If the file is missing we just skip the extra root.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_BACKEND_ROOT = os.path.dirname(os.path.dirname(_HERE))
+_AVAST_PEM = os.path.join(_BACKEND_ROOT, "certs", "avast-root.pem")
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """Build a context that trusts certifi + the local Avast PEM (if any).
+
+    Override via ``LLM_CA_BUNDLE`` (PEM path). Disable verification only
+    with ``LLM_INSECURE=true`` (debugging only — never enable by default).
+    """
+    if os.environ.get("LLM_INSECURE", "").strip().lower() in ("1", "true", "yes"):
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    explicit = os.environ.get("LLM_CA_BUNDLE", "").strip()
+    ctx = ssl.create_default_context(cafile=explicit or _DEFAULT_CA)
+    # Add the local Avast root on top of certifi. ``load_verify_locations``
+    # is a no-op if the file doesn't exist, so this is safe in
+    # environments without Avast too.
+    if os.path.isfile(_AVAST_PEM):
+        try:
+            ctx.load_verify_locations(_AVAST_PEM)
+        except ssl.SSLError:  # pragma: no cover
+            log.warning("Could not load %s as a CA bundle", _AVAST_PEM)
+    return ctx
+
+
+def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str], timeout: float = 60.0) -> dict[str, Any]:
+    """POST JSON with the LLM SSL context. Returns parsed body.
+
+    We inject a real-looking ``User-Agent`` by default — Groq's edge sits
+    behind Cloudflare, which blocks the default ``Python-urllib/3.x``
+    UA as a generic bot (HTTP 403, error code 1010). All four providers
+    ignore the UA otherwise, so it's a safe default.
+    """
+    body = json.dumps(payload).encode("utf-8")
+    merged = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        **headers,
+    }
+    req = urllib.request.Request(url, data=body, method="POST", headers=merged)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        # Body has the real error — surface it so the fallback can show it.
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        raise RuntimeError(f"{exc.code} {exc.reason}: {detail}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Provider selection
+# ---------------------------------------------------------------------------
+def _provider() -> str:
+    if settings.openai_api_key:
+        return "openai"
+    if settings.gemini_api_key:
+        return "gemini"
+    if settings.groq_api_key:
+        return "groq"
+    if settings.ollama_host:
+        return "ollama"
+    return "none"
+
+
+def is_configured() -> bool:
+    return _provider() != "none"
+
+
+# ---------------------------------------------------------------------------
+# Chat completion
+# ---------------------------------------------------------------------------
+SYSTEM_PROMPT = (
+    "You are VulnWatch, an AI assistant for a vulnerability management system. "
+    "You answer questions using only the supplied CVE context. Be concise. "
+    "Cite CVE IDs in the form CVE-YYYY-NNNN. If the context doesn't contain "
+    "the answer, say so explicitly."
+)
+
+
+def _messages(question: str, context: str) -> list[dict[str, str]]:
+    user = (
+        f"Context (relevant CVEs from the local database):\n\n{context}\n\n"
+        f"Question: {question}\n\n"
+        "Answer based on the context. If the context is empty or unrelated, say so."
+    )
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user},
+    ]
+
+
+def _openai_chat(question: str, context: str) -> str:
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {settings.openai_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": settings.openai_model,
+        "messages": _messages(question, context),
+        "temperature": 0.2,
+        "max_tokens": 600,
+    }
+    data = _post_json(url, payload, headers)
+    return data["choices"][0]["message"]["content"].strip()
+
+
+def _gemini_chat(question: str, context: str) -> str:
+    """Google Gemini via the public generateContent endpoint.
+
+    Free tier at https://aistudio.google.com/apikey — no card required.
+    """
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{settings.gemini_model}:generateContent"
+    )
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": (
+                            f"Context (relevant CVEs from the local database):\n\n"
+                            f"{context}\n\n"
+                            f"Question: {question}\n\n"
+                            "Answer based on the context. If the context is empty or unrelated, say so."
+                        )
+                    }
+                ],
+            }
+        ],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 600},
+    }
+    # Gemini wants the key in the query string, not as a header.
+    data = _post_json(f"{url}?key={settings.gemini_api_key}", payload, headers)
+    try:
+        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except (KeyError, IndexError) as exc:
+        raise RuntimeError(f"Unexpected Gemini response: {data}") from exc
+
+
+def _groq_chat(question: str, context: str) -> str:
+    """Groq — OpenAI-compatible hosted inference. Free tier at https://console.groq.com/keys.
+
+    Groq is the fastest free inference available (Llama 3.1 8B runs at
+    ~500 tok/s on their LPU hardware). The API mirrors OpenAI's
+    ``/v1/chat/completions`` endpoint, so we just point at a different
+    base URL.
+    """
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {settings.groq_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": settings.groq_model,
+        "messages": _messages(question, context),
+        "temperature": 0.2,
+        "max_tokens": 600,
+    }
+    data = _post_json(url, payload, headers)
+    return data["choices"][0]["message"]["content"].strip()
+
+
+def _ollama_chat(question: str, context: str) -> str:
+    """Local Ollama instance. Free, no signup, runs on the operator's box."""
+    url = f"{settings.ollama_host.rstrip('/')}/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "model": settings.ollama_model,
+        "messages": _messages(question, context),
+        "stream": False,
+        "options": {"temperature": 0.2},
+    }
+    data = _post_json(url, payload, headers, timeout=120.0)
+    if "choices" in data and data["choices"]:
+        return data["choices"][0]["message"]["content"].strip()
+    if "message" in data and "content" in data["message"]:
+        return data["message"]["content"].strip()
+    if "response" in data:
+        return data["response"].strip()
+    raise RuntimeError(f"Unexpected Ollama response: {data}")
+
+
+def chat(question: str, context: str) -> str:
+    """Return the assistant's reply. Raises on provider errors."""
+    provider = _provider()
+    if provider == "openai":
+        return _openai_chat(question, context)
+    if provider == "gemini":
+        return _gemini_chat(question, context)
+    if provider == "groq":
+        return _groq_chat(question, context)
+    if provider == "ollama":
+        return _ollama_chat(question, context)
+    raise RuntimeError("No LLM provider configured (set GROQ_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, or OLLAMA_HOST).")
+
+
+def provider_name() -> str:
+    """Human-readable provider name for the UI badge."""
+    p = _provider()
+    if p == "openai":
+        return f"OpenAI · {settings.openai_model}"
+    if p == "gemini":
+        return f"Gemini · {settings.gemini_model}"
+    if p == "groq":
+        return f"Groq · {settings.groq_model}"
+    if p == "ollama":
+        return f"Ollama · {settings.ollama_model}"
+    return "SQL-only (no LLM configured)"

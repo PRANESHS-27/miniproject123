@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/shield.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2563EB" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="VulnWatch — AI-powered vulnerability management." />
+    <title>VulnWatch — Vulnerability Management</title>
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <style>
+      /* Reserve visible content while React boots so the page is never blank. */
+      html, body { margin: 0; }
+      html { background: #F8FAFC; color: #0F172A; }
+      html.dark { background: #020617; color: #F1F5F9; }
+      body { background: inherit; color: inherit; font-family: 'Inter var', 'Inter', ui-sans-serif, system-ui, sans-serif; }
+      #boot { min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #64748B; font-size: 14px; letter-spacing: 0.01em; }
+    </style>
+  </head>
+  <body>
+    <div id="boot">Loading VulnWatch…</div>
+    <div id="root"></div>
+    <noscript>
+      <div style="padding:24px;font-family:system-ui;color:#0F172A;">
+        VulnWatch requires JavaScript to run. Please enable it and reload.
+      </div>
+    </noscript>
+    <script>
+      // Once React mounts, remove the boot placeholder so it never shows through.
+      (function () {
+        // Apply persisted theme to <html> before React mounts.
+        try {
+          var t = localStorage.getItem('vulnwatch_theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          if (t === 'dark') document.documentElement.classList.add('dark');
+        } catch (e) { /* private mode */ }
+
+        var obs = new MutationObserver(function () {
+          var root = document.getElementById('root');
+          if (root && root.childElementCount > 0) {
+            var boot = document.getElementById('boot');
+            if (boot) boot.remove();
+            obs.disconnect();
+          }
+        });
+        obs.observe(document.getElementById('root'), { childList: true });
+        // Failsafe
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          var boot = document.getElementById('boot');
+          if (root && root.childElementCount === 0 && boot) {
+            boot.textContent = 'VulnWatch failed to load. Open the browser console (F12) for details.';
+            boot.style.color = '#DC2626';
+          }
+        }, 15000);
+      })();
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

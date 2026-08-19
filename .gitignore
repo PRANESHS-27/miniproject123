@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# build outputs
+frontend/dist/
+frontend/build/
+backend/static/
+backend/htmlcov/
+.coverage
+.pytest_cache/
+
+# env
+.env
+.env.local
+*.pem
+*.key
+
+# database
+*.db
+*.sqlite3
+postgres-data/
+
+# vector store
+chroma-data/
+faiss-data/
+
+# reports & logs
+reports/*.pdf
+reports/*.csv
+logs/*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
