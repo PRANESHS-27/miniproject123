@@ -46,6 +46,8 @@ class UserOut(BaseModel):
     role: Role
     is_active: bool
     created_at: datetime
+    # RBAC 22 — every user belongs to exactly one institution.
+    institution_id: int = Field(default=0, ge=0)
 
     model_config = {"from_attributes": True}
 
@@ -57,5 +59,9 @@ class LoginRequest(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    # Optional refresh token. Present on /login and /refresh, absent on
+    # legacy /register callers that may still exist in the wild. Made
+    # required-with-default-None to keep backward compatibility.
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: UserOut

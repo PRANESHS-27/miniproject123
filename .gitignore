@@ -29,6 +29,11 @@ backend/htmlcov/
 *.sqlite3
 postgres-data/
 
+# backups (free-priority #20) — contains bcrypt hashes + audit data
+backups/
+*.sql.gz
+*.sql.gz.json
+
 # vector store
 chroma-data/
 faiss-data/

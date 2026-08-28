@@ -23,8 +23,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin, require_permission
+from app.api.deps import (
+    get_current_user,
+    get_tenant_context,
+    require_admin,
+    require_permission,
+)
 from app.db import SessionLocal, get_db
+from app.db.tenant import tenant_filter
 from app.models import (
     Asset,
     AssetCveMatch,
@@ -84,6 +90,11 @@ def _asset_to_list_item(db: Session, asset: Asset) -> AssetListItem:
         open_findings_count=open_count,
         critical_findings_count=critical_count,
         cves_matched_count=cves_count,
+        # Phase 4 — Risk Engine inputs
+        criticality=(asset.criticality.value
+                     if hasattr(asset.criticality, "value")
+                     else str(asset.criticality or "LOW")),
+        internet_exposed=bool(asset.internet_exposed),
     )
 
 
@@ -120,6 +131,7 @@ def create_asset(
     payload: AssetCreate,
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
+    ctx: int | None = Depends(get_tenant_context),
 ):
     from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
@@ -134,11 +146,18 @@ def create_asset(
         ]
         raw_url = urlunsplit(parts._replace(query=urlencode(kept)))
 
-    existing = db.query(Asset).filter(Asset.url == raw_url).one_or_none()
+    # RBAC 22 — duplicate check is per-tenant now: two institutions can
+    # legitimately host the same URL.
+    target_inst = ctx if ctx is not None else user.institution_id
+    existing = (
+        db.query(Asset)
+        .filter(Asset.url == raw_url, Asset.institution_id == target_inst)
+        .one_or_none()
+    )
     if existing:
         raise HTTPException(
             status_code=409,
-            detail=f"Asset already exists: {raw_url}",
+            detail=f"Asset already exists in this institution: {raw_url}",
         )
     asset = Asset(
         owner_id=user.id,
@@ -146,6 +165,11 @@ def create_asset(
         url=raw_url,
         env=payload.env,
         tags=payload.tags or [],
+        # Risk Engine inputs (Phase 4). Schema validator has already
+        # normalised the value to one of LOW/MEDIUM/HIGH/CRITICAL.
+        criticality=payload.criticality,
+        internet_exposed=payload.internet_exposed,
+        institution_id=target_inst,
     )
     db.add(asset)
     db.commit()
@@ -157,9 +181,10 @@ def create_asset(
 def list_assets(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
+    ctx: int | None = Depends(get_tenant_context),
     include_inactive: bool = Query(False),
 ):
-    q = db.query(Asset)
+    q = tenant_filter(db.query(Asset), Asset, ctx=ctx)
     if not include_inactive:
         q = q.filter(Asset.is_active.is_(True))
     rows = q.order_by(Asset.label.asc()).all()
@@ -170,12 +195,17 @@ def list_assets(
 def get_asset_stats(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
+    ctx: int | None = Depends(get_tenant_context),
 ):
     # Read from the same in-memory cve_index snapshot the dashboard uses
     # so the two pages always agree. Falls back to a one-shot rebuild if
     # the index hasn't been built yet. Without this the assets page and
     # the dashboard could disagree on aggregate counts (e.g. when a scan
     # just finished but the index hasn't been refreshed yet).
+    #
+    # RBAC 22 — for v1, the snapshot remains a global aggregate. A
+    # non-super-admin caller sees the global counts; super_admins see
+    # the same. A per-tenant snapshot is left as a follow-up (#19).
     from app.services import cve_index
     snap = cve_index.get()
     if not snap.get("ready"):
@@ -198,9 +228,13 @@ def get_asset_stats(
 def recent_scans(
     db: Session = Depends(get_db),
     _user: User = Depends(require_admin),
+    ctx: int | None = Depends(get_tenant_context),
     limit: int = Query(50, ge=1, le=200),
 ):
-    rows = db.query(AssetScan).order_by(desc(AssetScan.started_at)).limit(limit).all()
+    q = tenant_filter(db.query(AssetScan), AssetScan, ctx=ctx).order_by(
+        desc(AssetScan.started_at)
+    )
+    rows = q.limit(limit).all()
     return [AssetScanOut.model_validate(r) for r in rows]
 
 
@@ -209,9 +243,13 @@ def get_asset(
     asset_id: int,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
+    ctx: int | None = Depends(get_tenant_context),
 ):
-    asset = db.query(Asset).filter(Asset.id == asset_id).one_or_none()
+    asset = tenant_filter(
+        db.query(Asset).filter(Asset.id == asset_id), Asset, ctx=ctx
+    ).one_or_none()
     if not asset:
+        # 404 (not 403) — don't reveal that the asset exists in another tenant.
         raise HTTPException(status_code=404, detail="Asset not found")
     return _asset_to_detail(db, asset)
 
@@ -222,13 +260,20 @@ def update_asset(
     payload: AssetUpdate,
     db: Session = Depends(get_db),
     _user: User = Depends(require_admin),
+    ctx: int | None = Depends(get_tenant_context),
 ):
-    asset = db.query(Asset).filter(Asset.id == asset_id).one_or_none()
+    asset = tenant_filter(
+        db.query(Asset).filter(Asset.id == asset_id), Asset, ctx=ctx
+    ).one_or_none()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     data = payload.model_dump(exclude_unset=True)
     if "url" in data and data["url"]:
-        dup = db.query(Asset).filter(Asset.url == data["url"], Asset.id != asset_id).first()
+        dup = (
+            db.query(Asset)
+            .filter(Asset.url == data["url"], Asset.id != asset_id, Asset.institution_id == asset.institution_id)
+            .first()
+        )
         if dup:
             raise HTTPException(status_code=409, detail="Another asset already uses that URL")
     for k, v in data.items():
@@ -243,6 +288,17 @@ def update_asset(
             cve_index.refresh(db)
         except Exception:  # pragma: no cover
             pass
+    # Risk Engine: if criticality or internet_exposed changed, every
+    # open Finding for this asset needs to be re-scored. Done after
+    # commit so the new values are visible to the service.
+    if "criticality" in data or "internet_exposed" in data:
+        try:
+            from app.services.findings import recompute_for_asset
+            n = recompute_for_asset(db, asset.id)
+            if n:
+                db.commit()
+        except Exception:  # pragma: no cover
+            pass
     return _asset_to_detail(db, asset)
 
 
@@ -251,8 +307,11 @@ def delete_asset(
     asset_id: int,
     db: Session = Depends(get_db),
     _user: User = Depends(require_admin),
+    ctx: int | None = Depends(get_tenant_context),
 ):
-    asset = db.query(Asset).filter(Asset.id == asset_id).one_or_none()
+    asset = tenant_filter(
+        db.query(Asset).filter(Asset.id == asset_id), Asset, ctx=ctx
+    ).one_or_none()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     asset.is_active = False
@@ -307,8 +366,13 @@ def trigger_scan(
     background: BackgroundTasks,
     db: Session = Depends(get_db),
     _user: User = Depends(require_permission("asset", "scan")),
+    ctx: int | None = Depends(get_tenant_context),
 ):
-    asset = db.query(Asset).filter(Asset.id == asset_id).one_or_none()
+    # RBAC 22 — must resolve via tenant_filter so a non-super-admin can't
+    # queue scans against another institution's assets.
+    asset = tenant_filter(
+        db.query(Asset).filter(Asset.id == asset_id), Asset, ctx=ctx
+    ).one_or_none()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     # Fast-path: in-process check (cheap, no DB round-trip).
@@ -339,14 +403,24 @@ def list_findings(
     asset_id: int,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
+    ctx: int | None = Depends(get_tenant_context),
     type: Optional[str] = Query(None, description="Filter by finding_type"),
     severity: Optional[str] = Query(None),
     include_resolved: bool = Query(False),
 ):
-    asset = db.query(Asset).filter(Asset.id == asset_id).one_or_none()
+    # RBAC 22 — confirm the asset is visible to the caller's tenant
+    # before returning any findings (returns 404 not 403 to avoid
+    # leaking cross-tenant existence).
+    asset = tenant_filter(
+        db.query(Asset).filter(Asset.id == asset_id), Asset, ctx=ctx
+    ).one_or_none()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    q = db.query(AssetFinding).filter(AssetFinding.asset_id == asset_id)
+    q = tenant_filter(
+        db.query(AssetFinding).filter(AssetFinding.asset_id == asset_id),
+        AssetFinding,
+        ctx=ctx,
+    )
     if not include_resolved:
         q = q.filter(AssetFinding.resolved_at.is_(None))
     if type:
@@ -382,7 +456,16 @@ def resolve_finding(
     finding_id: int,
     db: Session = Depends(get_db),
     _user: User = Depends(require_permission("asset_finding", "resolve")),
+    ctx: int | None = Depends(get_tenant_context),
 ):
+    # RBAC 22 — confirm the asset is in caller's tenant first; finding
+    # lookup is scoped by asset_id, so an Asset not visible here also
+    # implies its findings aren't. 404, not 403, on miss.
+    asset = tenant_filter(
+        db.query(Asset).filter(Asset.id == asset_id), Asset, ctx=ctx
+    ).one_or_none()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Finding not found")
     f = (
         db.query(AssetFinding)
         .filter(AssetFinding.id == finding_id, AssetFinding.asset_id == asset_id)
@@ -408,8 +491,14 @@ def list_asset_cves(
     asset_id: int,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
+    ctx: int | None = Depends(get_tenant_context),
 ):
-    asset = db.query(Asset).filter(Asset.id == asset_id).one_or_none()
+    # RBAC 22 — same pattern: confirm tenant visibility, then return
+    # the matches. CVE rows themselves are global (shared intelligence),
+    # but the *list of which CVEs affect this asset* is per-tenant.
+    asset = tenant_filter(
+        db.query(Asset).filter(Asset.id == asset_id), Asset, ctx=ctx
+    ).one_or_none()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 

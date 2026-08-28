@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_tenant_context
 from app.db import get_db
 from app.models import User
 from app.schemas.vulnerability import (
@@ -22,9 +22,15 @@ router = APIRouter(prefix="/api/vulnerabilities", tags=["vulnerabilities"])
 def get_dashboard(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
+    ctx: int | None = Depends(get_tenant_context),
 ):
-    """Aggregated stats for the dashboard view."""
-    return dashboard_stats(db)
+    """Aggregated stats for the dashboard view.
+
+    RBAC 22 — ``ctx`` is the caller's institution id (or ``None`` for
+    SUPER_ADMIN without a header). Asset-derived counters scope by it;
+    CVE-derived counters stay global (CVE data is cross-tenant).
+    """
+    return dashboard_stats(db, institution_id=ctx)
 
 
 @router.get("/search", response_model=SearchResponse)

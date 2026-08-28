@@ -14,6 +14,11 @@ class AssetCreate(BaseModel):
     url: str = Field(min_length=4, max_length=512)
     env: str = Field(default="production")
     tags: list[str] = Field(default_factory=list)
+    # Risk Engine inputs. Both default to the conservative end so a
+    # newly-added asset does not silently inflate the dashboard before
+    # an analyst has triaged it.
+    criticality: str = Field(default="LOW")
+    internet_exposed: bool = Field(default=False)
 
     @field_validator("env")
     @classmethod
@@ -24,6 +29,16 @@ class AssetCreate(BaseModel):
             # "production" — silent coercion makes typos invisible.
             raise ValueError(
                 f"env must be one of production/staging/development (got {v!r})"
+            )
+        return v
+
+    @field_validator("criticality")
+    @classmethod
+    def _check_criticality(cls, v: str) -> str:
+        v = (v or "").strip().upper()
+        if v not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
+            raise ValueError(
+                f"criticality must be one of LOW/MEDIUM/HIGH/CRITICAL (got {v!r})"
             )
         return v
 
@@ -50,6 +65,20 @@ class AssetUpdate(BaseModel):
     env: Optional[str] = None
     is_active: Optional[bool] = None
     tags: Optional[list[str]] = None
+    criticality: Optional[str] = None
+    internet_exposed: Optional[bool] = None
+
+    @field_validator("criticality")
+    @classmethod
+    def _check_criticality(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        u = v.strip().upper()
+        if u not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
+            raise ValueError(
+                f"criticality must be one of LOW/MEDIUM/HIGH/CRITICAL (got {u!r})"
+            )
+        return u
 
     @field_validator("url")
     @classmethod
@@ -140,6 +169,9 @@ class AssetListItem(BaseModel):
     open_findings_count: int = 0
     critical_findings_count: int = 0
     cves_matched_count: int = 0
+    # Risk Engine inputs (Phase 4)
+    criticality: str = "LOW"
+    internet_exposed: bool = False
 
 
 class AssetOut(BaseModel):
@@ -158,6 +190,9 @@ class AssetOut(BaseModel):
     open_findings_count: int = 0
     critical_findings_count: int = 0
     cves_matched_count: int = 0
+    # Risk Engine inputs (Phase 4)
+    criticality: str = "LOW"
+    internet_exposed: bool = False
 
 
 class AssetStats(BaseModel):

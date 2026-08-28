@@ -19,13 +19,14 @@ import { Card, CardHeader, CardTitle, CardSubtitle, CardBody } from '../componen
 import { SeverityBadge } from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
 import { formatScore, formatNumber, formatShortDate } from '../utils/format.jsx'
-import { vulnerabilities as vulnApi, sync as syncApi } from '../services/api.js'
+import { vulnerabilities as vulnApi, sync as syncApi, findings as findingsApi } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { can } from '../hooks/permissions.js'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
 const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'NONE']
+const RISK_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']
 
 function chartPalette(isDark) {
   return {
@@ -62,6 +63,7 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const canSync = can(user, 'sync_trigger')
   const [stats, setStats] = useState(null)
+  const [findingsStats, setFindingsStats] = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [syncKind, setSyncKind] = useState(null)
   const [syncMeta, setSyncMeta] = useState(null)
@@ -72,7 +74,14 @@ export default function DashboardPage() {
     return vulnApi.dashboard().then(setStats).catch(() => toast.error('Failed to load dashboard'))
   }, [])
 
+  const loadFindingsStats = useCallback(() => {
+    return findingsApi.stats()
+      .then(setFindingsStats)
+      .catch(() => { /* findings may be empty in dev — non-fatal */ })
+  }, [])
+
   useEffect(() => { loadStats() }, [loadStats])
+  useEffect(() => { loadFindingsStats() }, [loadFindingsStats])
 
   // Refresh the "last sync" relative time every 30s
   useEffect(() => {
@@ -90,7 +99,7 @@ export default function DashboardPage() {
       const res = await fn()
       toast.success(res.message || 'Sync started')
       setSyncMeta({ kind, at: new Date() })
-      setTimeout(() => loadStats(), 8000)
+      setTimeout(() => { loadStats(); loadFindingsStats() }, 8000)
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Sync failed')
     } finally {
@@ -108,7 +117,7 @@ export default function DashboardPage() {
       await syncApi.kev()
       toast.success('KEV refresh started')
       setSyncMeta({ kind: 'kev', at: new Date() })
-      setTimeout(() => loadStats(), 6000)
+      setTimeout(() => { loadStats(); loadFindingsStats() }, 6000)
     } catch (e) {
       toast.error(e.response?.data?.detail || 'KEV sync failed')
     } finally {
@@ -139,6 +148,22 @@ export default function DashboardPage() {
       hoverOffset: 6,
     }],
   }
+
+  // Risk Engine widget — findings grouped by risk_label (CRITICAL..INFO)
+  // driven by /api/findings/stats so it reflects the engine's output,
+  // not the raw CVE store.
+  const riskCounts = RISK_ORDER.map((k) => findingsStats?.by_label?.[k] || 0)
+  const riskData = {
+    labels: RISK_ORDER,
+    datasets: [{
+      data: riskCounts,
+      backgroundColor: ['#DC2626', '#F97316', '#EAB308', '#22C55E', '#94A3B8'],
+      borderColor: 'transparent',
+      borderWidth: 0,
+      hoverOffset: 6,
+    }],
+  }
+  const totalRiskCount = riskCounts.reduce((a, b) => a + b, 0)
   const vendorsData = {
     labels: (stats.top_vendors_for_assets || []).map((v) => v.vendor),
     datasets: [{
@@ -177,6 +202,32 @@ export default function DashboardPage() {
           )
         }
       />
+
+      {/* Risk Engine headline counters — Phase 4 */}
+      {findingsStats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Stat
+            label="Open HIGH/CRITICAL"
+            value={formatNumber(findingsStats.open_high_or_critical)}
+            accent="danger"
+          />
+          <Stat
+            label="Open KEV findings"
+            value={formatNumber(findingsStats.kev_open)}
+            accent="warning"
+          />
+          <Stat
+            label="Total findings"
+            value={formatNumber(findingsStats.total)}
+            accent="brand"
+          />
+          <Stat
+            label="Resolved"
+            value={formatNumber(findingsStats.by_status?.resolved || 0)}
+            accent="success"
+          />
+        </div>
+      )}
 
       {/* Primary KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -220,6 +271,36 @@ export default function DashboardPage() {
             ) : (
               <div className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
                 No data yet — run a sync to populate.
+              </div>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Risk distribution</CardTitle>
+              <CardSubtitle>Engine output: CVSS × KEV × asset criticality × exposure.</CardSubtitle>
+            </div>
+          </CardHeader>
+          <CardBody className="pt-0">
+            {totalRiskCount > 0 ? (
+              <Doughnut
+                data={riskData}
+                options={{
+                  plugins: {
+                    legend: {
+                      position: 'bottom',
+                      labels: { color: palette.text, font: { size: 11 }, boxWidth: 8, boxHeight: 8, padding: 12 },
+                    },
+                  },
+                  cutout: '65%',
+                  maintainAspectRatio: true,
+                }}
+              />
+            ) : (
+              <div className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                No findings yet — add an asset and run a scan to populate.
               </div>
             )}
           </CardBody>

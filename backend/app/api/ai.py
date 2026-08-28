@@ -39,7 +39,9 @@ def ask(
 @router.get("/status")
 def status(_: User = Depends(get_current_user)):
     """Report which LLM provider is wired up so the UI can badge it."""
+    from app.ai import rag
     return {
         "provider": llm.provider_name(),
         "configured": llm.is_configured(),
+        "retrieval": rag.retrieval_mode(),
     }

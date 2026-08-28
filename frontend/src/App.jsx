@@ -12,6 +12,7 @@ import CveDetailPage from './pages/CveDetailPage.jsx'
 import AiPage from './pages/AiPage.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
 import AssetsPage from './pages/AssetsPage.jsx'
+import FindingsPage from './pages/FindingsPage.jsx'
 import AssetDetailPage from './pages/AssetDetailPage.jsx'
 import AdminUsersPage from './pages/AdminUsersPage.jsx'
 import { useAuth } from './context/AuthContext.jsx'
@@ -69,9 +70,10 @@ export default function App() {
           <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
           <Route path="/cve/:cveId" element={<ProtectedRoute><CveDetailPage /></ProtectedRoute>} />
           <Route path="/ai" element={<ProtectedRoute><AiPage /></ProtectedRoute>} />
-          <Route path="/reports" element={<RequireRole roles={['admin']}><ReportsPage /></RequireRole>} />
+          <Route path="/reports" element={<RequireRole minTier="security_analyst"><ReportsPage /></RequireRole>} />
           <Route path="/assets" element={<ProtectedRoute><AssetsPage /></ProtectedRoute>} />
           <Route path="/assets/:id" element={<ProtectedRoute><AssetDetailPage /></ProtectedRoute>} />
+          <Route path="/findings" element={<ProtectedRoute><FindingsPage /></ProtectedRoute>} />
           <Route path="/admin/users" element={<RequireRole roles={['admin']}><AdminUsersPage /></RequireRole>} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

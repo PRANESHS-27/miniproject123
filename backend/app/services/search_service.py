@@ -9,6 +9,7 @@ the JSON product walk has been removed.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import HTTPException
 from sqlalchemy import desc, func, or_
@@ -84,15 +85,23 @@ def search_vulnerabilities(
     return rows, total
 
 
-def dashboard_stats(db: Session) -> DashboardStats:
+def dashboard_stats(
+    db: Session,
+    institution_id: Optional[int] = None,
+) -> DashboardStats:
     """Aggregate stats for the dashboard view.
 
     Served entirely from the in-memory ``cve_index`` snapshot. Falls back
     to a one-shot rebuild if the index hasn't been built yet.
+
+    RBAC 22 — ``institution_id`` is the caller's tenant (or ``None`` for
+    SUPER_ADMIN without an X-Institution-Id header). v1 keeps a single
+    global snapshot for performance; non-super-admin callers see the
+    global counters. A per-tenant snapshot is tracked under #19.
     """
     snap = cve_index.get()
     if not snap.get("ready"):
-        cve_index.refresh(db)
+        cve_index.refresh(db, institution_id=institution_id)
         snap = cve_index.get()
 
     by_sev = snap["by_severity"]

@@ -128,3 +128,12 @@ export const admin = {
   updateUser: (id, payload) => api.patch(`/api/admin/users/${id}`, payload).then((r) => r.data),
   deleteUser: (id) => api.delete(`/api/admin/users/${id}`).then((r) => r.data),
 }
+
+// ----- Findings (Phase 4 — Risk Engine output) -----
+export const findings = {
+  list: (params) => api.get('/api/findings', { params }).then((r) => r.data),
+  stats: () => api.get('/api/findings/stats').then((r) => r.data),
+  get: (id) => api.get(`/api/findings/${id}`).then((r) => r.data),
+  update: (id, payload) => api.patch(`/api/findings/${id}`, payload).then((r) => r.data),
+  acceptRisk: (id, reason) => api.post(`/api/findings/${id}/accept-risk`, { reason }).then((r) => r.data),
+}

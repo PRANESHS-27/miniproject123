@@ -10,9 +10,12 @@ import { formatDate } from '../utils/format.jsx'
 import { Card, CardBody } from '../components/Card.jsx'
 import { admin } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
-import { roleBadgeStyle } from '../hooks/permissions.js'
-
-const ROLE_OPTIONS = ['admin', 'analyst', 'viewer']
+import {
+  grantableRoles,
+  roleBadgeStyle,
+  roleLabel,
+  userTier,
+} from '../hooks/permissions.js'
 
 export default function AdminUsersPage() {
   const { user: me } = useAuth()
@@ -67,7 +70,7 @@ export default function AdminUsersPage() {
       </div>
     ) },
     { key: 'email', header: 'Email', render: (u) => <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{u.email}</span> },
-    { key: 'role', header: 'Role', render: (u) => <span className={`badge ${roleBadgeStyle(u.role)}`}>{u.role}</span> },
+    { key: 'role', header: 'Role', render: (u) => <span className={`badge ${roleBadgeStyle(u.role)}`}>{roleLabel(u.role)}</span> },
     { key: 'status', header: 'Status', render: (u) => (
       <span className={`badge capitalize ${u.is_active
         ? 'bg-success-50 text-success-700 border-success-200 dark:bg-success-950/40 dark:text-success-300 dark:border-success-800/60'
@@ -91,7 +94,7 @@ export default function AdminUsersPage() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="User Management"
-        subtitle="Create, edit, and disable user accounts. Admin role unlocks every feature."
+        subtitle={`Create, edit, and disable user accounts. Your role (${roleLabel(me?.role)}) can grant the roles shown below.`}
         actions={
           <Button variant="primary" onClick={() => setShowCreate(true)} leftIcon={
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -149,12 +152,14 @@ export default function AdminUsersPage() {
 }
 
 function CreateUserModal({ onClose, onCreated }) {
+  const { user: me } = useAuth()
+  const options = grantableRoles(me)
   const [form, setForm] = useState({
     username: '',
     email: '',
     full_name: '',
     password: '',
-    role: 'viewer',
+    role: options[options.length - 1] || 'viewer',
     is_active: true,
   })
   const [busy, setBusy] = useState(false)
@@ -223,7 +228,9 @@ function CreateUserModal({ onClose, onCreated }) {
           <div>
             <label className="label">Role</label>
             <select className="input" name="role" value={form.role} onChange={onChange}>
-              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              {options.map((r) => (
+                <option key={r} value={r}>{roleLabel(r)}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -240,6 +247,14 @@ function CreateUserModal({ onClose, onCreated }) {
 }
 
 function EditUserModal({ user, onClose, onSaved }) {
+  const { user: me } = useAuth()
+  const options = grantableRoles(me)
+  // Pre-filter: if the current actor can't grant the user's existing
+  // role, hide that option but keep the value as-is (the backend will
+  // refuse the change anyway, so it's a no-op edit).
+  const roleOptions = options.includes(user.role)
+    ? options
+    : [user.role, ...options]
   const [role, setRole] = useState(user.role)
   const [isActive, setIsActive] = useState(user.is_active)
   const [busy, setBusy] = useState(false)
@@ -276,10 +291,12 @@ function EditUserModal({ user, onClose, onSaved }) {
         <div>
           <label className="label">Role</label>
           <select className="input" value={role} onChange={(e) => setRole(e.target.value)}>
-            {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            {roleOptions.map((r) => (
+              <option key={r} value={r}>{roleLabel(r)}</option>
+            ))}
           </select>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Admin = full access · Analyst = scan/AI/resolve · Viewer = read-only.
+            Super Admin = cross-tenant · Institution Admin = manage users &amp; assets · Security Analyst = scan/AI/resolve · Viewer = read-only.
           </p>
         </div>
         <div>

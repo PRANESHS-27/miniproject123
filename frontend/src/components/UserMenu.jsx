@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import { roleBadgeStyle } from '../hooks/permissions.js'
+import { roleBadgeStyle, roleLabel } from '../hooks/permissions.js'
 
 function initials(name) {
   if (!name) return '?'
@@ -74,7 +74,7 @@ export default function UserMenu() {
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email || '—'}</p>
             {user?.role && (
               <span className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase border ${roleBadgeStyle(user.role)}`}>
-                {user.role}
+                {roleLabel(user.role)}
               </span>
             )}
           </div>

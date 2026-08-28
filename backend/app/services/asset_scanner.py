@@ -296,6 +296,23 @@ def scan_one_asset(
         from app.services.asset_matcher import match_cves
         matched = match_cves(db, asset.id, tech_pairs_for_match)
 
+        # 2b. Risk Engine — create / refresh Findings for the matches the
+        # matcher just produced. Done here (rather than inside
+        # ``match_cves``) so the matcher stays a pure data-lookup helper
+        # and the scoring side-effect is visible at the scan boundary.
+        try:
+            from app.models import AssetCveMatch
+            from app.services.findings import upsert_many as findings_upsert_many
+            fresh_matches = (
+                db.query(AssetCveMatch)
+                .filter(AssetCveMatch.asset_id == asset.id)
+                .all()
+            )
+            findings_upsert_many(db, fresh_matches, source="scan")
+            db.commit()
+        except Exception as exc:  # pragma: no cover - never fail a scan over scoring
+            logger.warning("findings upsert after scan failed for %s: %s", asset.url, exc)
+
         # 3. Append CVE findings as a separate finding_type
         all_findings = list(result["findings"])
         # Guardrail: cap CVE-derived findings per scan to keep the

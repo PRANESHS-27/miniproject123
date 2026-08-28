@@ -25,6 +25,7 @@ const ALL_NAV = [
   { to: '/dashboard',   label: 'Dashboard',  icon: DotsIcon,    permission: 'dashboard' },
   { to: '/search',      label: 'Search',     icon: SearchIcon,  permission: 'vulnerability' },
   { to: '/assets',      label: 'Assets',     icon: AssetIcon,   permission: 'asset' },
+  { to: '/findings',    label: 'Findings',   icon: FindingsIcon, permission: 'finding_read' },
   { to: '/ai',          label: 'AI Analyst', icon: SparkleIcon, permission: 'ai_ask' },
   { to: '/reports',     label: 'Reports',    icon: ReportIcon,  permission: 'report_generate' },
   { to: '/admin/users', label: 'Users',      icon: UsersIcon,   permission: 'user_manage' },
@@ -150,6 +151,15 @@ function AssetIcon(props) {
       <path d="M3 21h18" />
       <path d="M5 21V7l7-4 7 4v14" />
       <path d="M9 9h2M13 9h2M9 13h2M13 13h2M9 17h2M13 17h2" />
+    </svg>
+  )
+}
+function FindingsIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6l-8-4z" />
+      <path d="M12 8v4" />
+      <path d="M12 16h.01" />
     </svg>
   )
 }

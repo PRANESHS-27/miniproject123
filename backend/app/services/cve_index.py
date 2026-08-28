@@ -117,7 +117,10 @@ def _build_global_vendor_counts(idx: dict[str, set[str]]) -> list[dict[str, Any]
     return [{"vendor": v, "count": c} for v, c in counter.most_common(10)]
 
 
-def _build_asset_vendor_counts(db: Session) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _build_asset_vendor_counts(
+    db: Session,
+    institution_id: int | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Top vendors / products on the actually-detected stack for active assets.
 
     IMPORTANT: This must come from ``AssetTechnology`` rows on the asset — the
@@ -125,16 +128,21 @@ def _build_asset_vendor_counts(db: Session) -> tuple[list[dict[str, Any]], list[
     not here. Counting affected_products here would inflate the dashboard
     "Vendors affecting your stack" with vendored CVEs that have no link to
     the asset's actual technology footprint.
+
+    RBAC 22 — when ``institution_id`` is set, scope to that tenant's
+    active assets.
     """
-    rows = (
+    q = (
         db.query(
             AssetTechnology.vendor.label("vendor"),
             AssetTechnology.product.label("product"),
         )
         .join(Asset, Asset.id == AssetTechnology.asset_id)
         .filter(Asset.is_active.is_(True))
-        .all()
     )
+    if institution_id is not None:
+        q = q.filter(Asset.institution_id == institution_id)
+    rows = q.all()
     v_counter: Counter[str] = Counter()
     p_counter: Counter[str] = Counter()
     seen_v: set[str] = set()
@@ -158,9 +166,17 @@ def _build_asset_vendor_counts(db: Session) -> tuple[list[dict[str, Any]], list[
     )
 
 
-def _build_tech_counts(db: Session) -> list[dict[str, Any]]:
+def _build_tech_counts(
+    db: Session,
+    institution_id: int | None = None,
+) -> list[dict[str, Any]]:
     counter: Counter[str] = Counter()
-    for row in db.query(AssetTechnology.vendor, AssetTechnology.product).all():
+    q = db.query(AssetTechnology.vendor, AssetTechnology.product)
+    if institution_id is not None:
+        q = q.join(
+            Asset, Asset.id == AssetTechnology.asset_id
+        ).filter(Asset.institution_id == institution_id)
+    for row in q.all():
         if row.vendor:
             counter[f"{row.vendor}:{row.product}"] += 1
     return [{"tech": k, "count": v} for k, v in counter.most_common(10)]
@@ -188,10 +204,17 @@ def _build_recent(db: Session, limit: int = 10) -> list[dict[str, Any]]:
     return out
 
 
-def refresh(db: Session) -> dict[str, Any]:
+def refresh(db: Session, institution_id: int | None = None) -> dict[str, Any]:
     """Rebuild the whole snapshot. Call from app startup and after bulk writes.
 
     Returns the new snapshot.
+
+    RBAC 22 — when ``institution_id`` is provided, the asset-derived
+    counters (total_assets, open_findings, etc.) are scoped to that
+    institution. CVE-derived counters (total_cves, by_severity, kev_count,
+    recent, top_vendors) stay global — CVE data is cross-tenant by
+    definition. ``institution_id=None`` (default) preserves the historical
+    global view.
     """
     # Severity histogram in one round-trip.
     # IMPORTANT: SQLite stores enum *values* (strings), Postgres returns
@@ -224,27 +247,36 @@ def refresh(db: Session) -> dict[str, Any]:
     excluded_ids = _build_excluded(db)
     vendor_idx = _build_vendor_index(db)
     top_vendors = _build_global_vendor_counts(vendor_idx)
-    asset_v, asset_p = _build_asset_vendor_counts(db)
-    tech = _build_tech_counts(db)
+    asset_v, asset_p = _build_asset_vendor_counts(db, institution_id=institution_id)
+    tech = _build_tech_counts(db, institution_id=institution_id)
     recent = _build_recent(db, 10)
 
-    total_assets = db.query(Asset).count()
-    active_assets = db.query(Asset).filter(Asset.is_active.is_(True)).count()
-    open_findings = (
-        db.query(AssetFinding).filter(AssetFinding.resolved_at.is_(None)).count()
-    )
+    asset_q = db.query(Asset)
+    if institution_id is not None:
+        asset_q = asset_q.filter(Asset.institution_id == institution_id)
+    total_assets = asset_q.count()
+    active_assets = asset_q.filter(Asset.is_active.is_(True)).count()
+
+    finding_q = db.query(AssetFinding)
+    if institution_id is not None:
+        finding_q = finding_q.join(
+            Asset, Asset.id == AssetFinding.asset_id
+        ).filter(Asset.institution_id == institution_id)
+    open_findings = finding_q.filter(AssetFinding.resolved_at.is_(None)).count()
+
     critical_findings = (
-        db.query(AssetFinding)
-        .filter(AssetFinding.resolved_at.is_(None))
+        finding_q.filter(AssetFinding.resolved_at.is_(None))
         .filter(AssetFinding.severity == SeverityLevel.CRITICAL)
         .count()
     )
+
+    match_q = db.query(func.count(func.distinct(AssetCveMatch.cve_id))).join(
+        Asset, Asset.id == AssetCveMatch.asset_id
+    )
+    if institution_id is not None:
+        match_q = match_q.filter(Asset.institution_id == institution_id)
     cves_affecting_us = (
-        db.query(func.count(func.distinct(AssetCveMatch.cve_id)))
-        .join(Asset, Asset.id == AssetCveMatch.asset_id)
-        .filter(Asset.is_active.is_(True))
-        .scalar()
-        or 0
+        match_q.filter(Asset.is_active.is_(True)).scalar() or 0
     )
     assets_with_critical = (
         db.query(func.count(func.distinct(AssetFinding.asset_id)))
@@ -255,12 +287,15 @@ def refresh(db: Session) -> dict[str, Any]:
         .scalar()
         or 0
     )
-    findings_by_type_rows = (
+    fbt_q = (
         db.query(AssetFinding.finding_type, func.count(AssetFinding.id))
         .filter(AssetFinding.resolved_at.is_(None))
-        .group_by(AssetFinding.finding_type)
-        .all()
     )
+    if institution_id is not None:
+        fbt_q = fbt_q.join(
+            Asset, Asset.id == AssetFinding.asset_id
+        ).filter(Asset.institution_id == institution_id)
+    findings_by_type_rows = fbt_q.group_by(AssetFinding.finding_type).all()
     findings_by_type = {
         (ft.value if hasattr(ft, "value") else str(ft)): count
         for ft, count in findings_by_type_rows

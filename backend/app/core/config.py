@@ -31,7 +31,24 @@ class Settings(BaseSettings):
         default="dev-only-do-not-use-in-production-XYZ-please-set-SECRET_KEY"
     )
     access_token_expire_minutes: int = 1440
+    refresh_token_expire_minutes: int = 60 * 24 * 7  # 7 days
     algorithm: str = "HS256"
+
+    # ===== Bootstrap admin (24a) =====
+    # All three are required for the first-run admin to be created. When
+    # the user table is empty, ``_bootstrap_admin`` creates an account
+    # using these values. Defaults exist for development convenience, but
+    # ``APP_ENV=production`` requires all three to be set explicitly —
+    # shipping a default-credential admin is the single most common
+    # production-deploy mistake.
+    admin_username: str = "admin"
+    admin_email: str = "admin@vulnwatch.local"
+    admin_password: str = "Admin@123"
+    # When True, refuses to seed the bootstrap admin at all if the
+    # operator hasn't supplied ADMIN_PASSWORD. Recommended for any
+    # production-style environment so the admin row must be created via
+    # the registration endpoint by a real operator who knows the secret.
+    require_admin_password: bool = False
 
     # ===== Database =====
     database_url: str = (
@@ -94,11 +111,47 @@ class Settings(BaseSettings):
     # supported (incompatible with credentials).
     cors_allowed_origins: str = ""
 
+    # ===== Rate limiting (24c) =====
+    # Max login attempts per minute per client IP. Lower in production,
+    # higher (or 0 = disabled) for local dev convenience.
+    login_rate_limit_per_minute: int = 5
+
     # ===== Asset scanner =====
     asset_scan_interval_hours: int = 24
     asset_scan_timeout_seconds: float = 10.0
     asset_scan_max_concurrency: int = 5
     asset_scan_user_agent: str = "VulnWatch/1.0 AssetScanner (+https://vulnwatch.local)"
+
+    # ===== Backups (free-priority #20) =====
+    # Local directory the backup script writes to. Operators should mount
+    # a persistent volume here in production so the file survives container
+    # restarts.
+    backup_dir: str = "./backups"
+    # How many local + S3 backups ``backup prune --keep N`` retains.
+    backup_retention_count: int = 7
+    # Opt-in: when True, the in-process APScheduler runs a daily backup
+    # job (see app/services/scheduler_jobs.py). Off by default so a
+    # dev install doesn't accidentally spam S3.
+    backup_enabled: bool = False
+    # UTC hour for the daily backup (0-23). 03:00 UTC is the default —
+    # low-traffic for most operators.
+    backup_schedule_hour_utc: int = 3
+    # Opt-in: when True AND AWS credentials are set, every backup is
+    # uploaded to ``s3_bucket`` under ``backups/<name>``. Kept separate
+    # from "is S3 configured" so operators with S3 configured for other
+    # features can still keep backups local-only.
+    backup_upload_to_s3: bool = False
+
+    # ===== Health / sync monitoring (free-priority #19) =====
+    # A sync source is considered "stale" if its last successful run is
+    # older than this many hours. Surfaces in /api/sync/status and
+    # /api/health so operators see a red flag before NVD drift becomes
+    # a missed-CVE incident.
+    sync_stale_hours: int = 48
+    # Asset scans are scheduled daily; consider them stale after this
+    # many hours of inactivity. 36h catches a missed daily run before
+    # the second miss.
+    asset_scan_stale_hours: int = 36
 
     @property
     def asset_probe_paths(self) -> list[str]:
