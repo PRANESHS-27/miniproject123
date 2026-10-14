@@ -22,13 +22,18 @@ function cx(...args) {
 }
 
 const ALL_NAV = [
-  { to: '/dashboard',   label: 'Dashboard',  icon: DotsIcon,    permission: 'dashboard' },
-  { to: '/search',      label: 'Search',     icon: SearchIcon,  permission: 'vulnerability' },
-  { to: '/assets',      label: 'Assets',     icon: AssetIcon,   permission: 'asset' },
-  { to: '/findings',    label: 'Findings',   icon: FindingsIcon, permission: 'finding_read' },
-  { to: '/ai',          label: 'AI Analyst', icon: SparkleIcon, permission: 'ai_ask' },
-  { to: '/reports',     label: 'Reports',    icon: ReportIcon,  permission: 'report_generate' },
-  { to: '/admin/users', label: 'Users',      icon: UsersIcon,   permission: 'user_manage' },
+  { to: '/dashboard',    label: 'Dashboard',    icon: DotsIcon,     permission: 'dashboard' },
+  { to: '/search',       label: 'CVE Registry', icon: SearchIcon,   permission: 'vulnerability' },
+  { to: '/assets',       label: 'Assets',       icon: AssetIcon,    permission: 'asset' },
+  { to: '/scans',        label: 'Scans',        icon: ScansIcon,    permission: 'asset' },
+  { to: '/findings',     label: 'Findings',     icon: FindingsIcon, permission: 'finding_read' },
+  { to: '/ai',           label: 'AI Assistant', icon: SparkleIcon,  permission: 'ai_ask' },
+  { to: '/alerts',       label: 'Alerts',       icon: AlertsIcon,   permission: 'dashboard' },
+  { to: '/reports',      label: 'Reports',      icon: ReportIcon,   permission: 'report_generate' },
+  { to: '/audit-logs',   label: 'Audit Logs',   icon: AuditIcon,    permission: 'user_manage' },
+  { to: '/institutions', label: 'Institutions', icon: BuildingIcon, permission: 'institution_manage' },
+  { to: '/admin/users',  label: 'Users',        icon: UsersIcon,    permission: 'user_manage' },
+  { to: '/settings',     label: 'Settings',     icon: GearIcon,     permission: 'dashboard' },
 ]
 
 export default function Sidebar() {
@@ -187,6 +192,46 @@ function UsersIcon(props) {
       <circle cx="9" cy="7" r="4" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+function ScansIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m10 15 5-3-5-3v6z" />
+    </svg>
+  )
+}
+function AlertsIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
+function AuditIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  )
+}
+function BuildingIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="4" y="2" width="16" height="20" rx="2" />
+      <path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01" />
+    </svg>
+  )
+}
+function GearIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   )
 }

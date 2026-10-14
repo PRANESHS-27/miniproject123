@@ -7,9 +7,9 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# System deps for psycopg2 + sentence-transformers
+# System deps for psycopg2 + sentence-transformers + network scanning
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential libpq-dev curl \
+        build-essential libpq-dev curl nmap \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt .

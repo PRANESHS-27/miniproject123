@@ -502,8 +502,29 @@ class AssetScan(Base):
     status: Mapped[str] = mapped_column(String(32), default="running")
     error: Mapped[str | None] = mapped_column(Text)
     triggered_by: Mapped[str] = mapped_column(String(32), default="manual")
+    scan_profile: Mapped[str] = mapped_column(String(64), default="web_standard")
+    raw_output: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     asset: Mapped[Asset] = relationship(back_populates="scans")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "asset_id": self.asset_id,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+            "items_found": self.items_found,
+            "inserted_count": self.inserted_count,
+            "re_seen_count": self.re_seen_count,
+            "closed_count": self.closed_count,
+            "technologies_detected": self.technologies_detected,
+            "cves_matched": self.cves_matched,
+            "status": self.status,
+            "error": self.error,
+            "triggered_by": self.triggered_by,
+            "scan_profile": self.scan_profile,
+            "raw_output": self.raw_output or {},
+        }
 
 
 class AssetCveMatch(Base):
@@ -634,4 +655,89 @@ class Finding(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+        }
+
+
+# ===========================================================================
+# Alerts & Audit Logging
+# ===========================================================================
+class Alert(Base):
+    """Institutional alert for high-priority security findings."""
+
+    __tablename__ = "alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text(str(DEFAULT_INSTITUTION_ID)),
+    )
+    asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    finding_id: Mapped[int | None] = mapped_column(
+        ForeignKey("findings.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(256), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), default="HIGH", index=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_dismissed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow_naive, index=True)
+
+    institution: Mapped["Institution"] = relationship()
+    asset: Mapped["Asset | None"] = relationship()
+    finding: Mapped["Finding | None"] = relationship()
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "institution_id": self.institution_id,
+            "asset_id": self.asset_id,
+            "finding_id": self.finding_id,
+            "title": self.title,
+            "message": self.message,
+            "severity": self.severity,
+            "is_read": self.is_read,
+            "is_dismissed": self.is_dismissed,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class AuditLog(Base):
+    """Unified security audit log."""
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    actor_username: Mapped[str] = mapped_column(String(64), index=True)
+    action: Mapped[str] = mapped_column(String(64), index=True)
+    resource_type: Mapped[str] = mapped_column(String(64), index=True)
+    resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    outcome: Mapped[str] = mapped_column(String(32), default="success")
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow_naive, index=True)
+
+    user: Mapped["User | None"] = relationship()
+    institution: Mapped["Institution | None"] = relationship()
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "institution_id": self.institution_id,
+            "user_id": self.user_id,
+            "actor_username": self.actor_username,
+            "action": self.action,
+            "resource_type": self.resource_type,
+            "resource_id": self.resource_id,
+            "ip": self.ip,
+            "details": self.details or {},
+            "outcome": self.outcome,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }

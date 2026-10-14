@@ -19,6 +19,8 @@ export function formatDate(d) {
   }
 }
 
+export const formatDateTime = formatDate
+
 export function formatShortDate(d) {
   if (!d) return '—'
   try {

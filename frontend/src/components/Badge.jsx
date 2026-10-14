@@ -64,13 +64,22 @@ export function FindingBadge({ type, className = '' }) {
   )
 }
 
-export function StatusBadge({ status, className = '' }) {
-  const style = STATUS_STYLES[status]
+export function StatusBadge({ status, children, className = '' }) {
+  const normalized = (status || '').toLowerCase()
+  const style = STATUS_STYLES[normalized] || STATUS_STYLES.active
   const cls = style ? style.light : 'bg-slate-100 text-slate-600 border-slate-200'
-  return <span className={`badge ${cls} capitalize ${className}`}>{status}</span>
+  return (
+    <span className={`badge ${cls} ${className}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-75" aria-hidden="true" />
+      <span>{children || status}</span>
+    </span>
+  )
 }
 
-export default function Badge({ kind = 'severity', value, className = '' }) {
+export default function Badge({ kind = 'severity', value, variant, children, className = '' }) {
+  if (children || variant) {
+    return <StatusBadge status={variant || value || 'active'} className={className}>{children || value}</StatusBadge>
+  }
   if (kind === 'finding') return <FindingBadge type={value} className={className} />
   if (kind === 'status')  return <StatusBadge status={value} className={className} />
   return <SeverityBadge severity={value} className={className} />

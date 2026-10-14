@@ -8,14 +8,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import (
     admin_router,
     ai_router,
+    alerts_router,
     assets_router,
+    assistant_router,
+    audit_logs_router,
     auth_router,
+    dashboard_router,
     findings_router,
     health_router,
+    institutions_router,
     liveness_router,
     reports_router,
-    vulnerabilities_router,
+    scans_router,
     sync_router,
+    vulnerabilities_router,
 )
 from app.core.config import settings
 from app.core.logging_config import get_logger, setup_logging
@@ -154,6 +160,8 @@ def _apply_schema_patches() -> None:
         "ALTER TABLE asset_scans ADD COLUMN inserted_count INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE asset_scans ADD COLUMN re_seen_count INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE asset_scans ADD COLUMN closed_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE asset_scans ADD COLUMN scan_profile VARCHAR(64) NOT NULL DEFAULT 'web_standard'",
+        "ALTER TABLE asset_scans ADD COLUMN raw_output JSON",
         # Risk Engine inputs on Asset (added Phase 4).
         "ALTER TABLE assets ADD COLUMN criticality VARCHAR(16) NOT NULL DEFAULT 'LOW'",
         "ALTER TABLE assets ADD COLUMN internet_exposed BOOLEAN NOT NULL DEFAULT 0",
@@ -230,7 +238,7 @@ def _migrate_assets_url_composite_unique() -> None:
     introspect ``sqlite_master`` / ``pg_indexes`` to find any index that
     covers ``url`` but NOT ``institution_id``.
     """
-    from sqlalchemy import inspect
+    from sqlalchemy import inspect, text
 
     inspector = inspect(engine)
     # Skip if the new composite unique already exists.
@@ -336,12 +344,18 @@ log.info("CORS allowed origins: %s", _cors_origins)
 
 # Routers
 app.include_router(auth_router)
+app.include_router(dashboard_router)
 app.include_router(vulnerabilities_router)
 app.include_router(ai_router)
+app.include_router(assistant_router)
 app.include_router(reports_router)
 app.include_router(sync_router)
 app.include_router(assets_router)
+app.include_router(scans_router)
 app.include_router(findings_router)
+app.include_router(alerts_router)
+app.include_router(audit_logs_router)
+app.include_router(institutions_router)
 app.include_router(admin_router)
 # Health routers — the liveness_router carries /health (legacy) and the
 # health_router carries /api/health/* (privileged readiness probe).

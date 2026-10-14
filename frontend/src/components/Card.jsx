@@ -12,7 +12,7 @@ const VARIANTS = {
 }
 
 export const Card = forwardRef(function Card(
-  { variant = 'default', interactive = false, className = '', children, ...rest },
+  { variant = 'default', interactive = false, className = '', title, subtitle, headerAction, children, ...rest },
   ref,
 ) {
   const baseCls = VARIANTS[variant] || VARIANTS.default
@@ -21,6 +21,15 @@ export const Card = forwardRef(function Card(
     : ''
   return (
     <div ref={ref} className={`rounded-2xl ${baseCls} ${hoverCls} ${className}`} {...rest}>
+      {(title || subtitle || headerAction) && (
+        <CardHeader>
+          <div>
+            {title && <CardTitle>{title}</CardTitle>}
+            {subtitle && <CardSubtitle>{subtitle}</CardSubtitle>}
+          </div>
+          {headerAction && <div>{headerAction}</div>}
+        </CardHeader>
+      )}
       {children}
     </div>
   )

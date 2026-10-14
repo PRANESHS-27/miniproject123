@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import UserMenu from './UserMenu.jsx'
 import ThemeToggle from './ThemeToggle.jsx'
+import ColorPalettePicker from './ColorPalettePicker.jsx'
 
 export default function TopBar({ onOpenSearch }) {
   const [shortcut, setShortcut] = useState('Ctrl K')
@@ -42,6 +43,7 @@ export default function TopBar({ onOpenSearch }) {
       </button>
 
       <div className="ml-auto flex items-center gap-2">
+        <ColorPalettePicker />
         <ThemeToggle />
         <UserMenu />
       </div>

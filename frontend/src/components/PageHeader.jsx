@@ -6,10 +6,14 @@ import { Link } from 'react-router-dom'
 export default function PageHeader({
   title,
   subtitle = null,
+  description = null,
   eyebrow = null,
   breadcrumbs = [],
   actions = null,
+  action = null,
 }) {
+  const effectiveSubtitle = subtitle || description
+  const effectiveActions = actions || action
   return (
     <header className="mb-6">
       {breadcrumbs.length > 0 && (
@@ -47,15 +51,15 @@ export default function PageHeader({
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
             {title}
           </h1>
-          {subtitle && (
+          {effectiveSubtitle && (
             <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">
-              {subtitle}
+              {effectiveSubtitle}
             </p>
           )}
         </div>
-        {actions && (
+        {effectiveActions && (
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {actions}
+            {effectiveActions}
           </div>
         )}
       </div>

@@ -23,7 +23,22 @@ def db_session(monkeypatch):
         "sqlite:///:memory:", connect_args={"check_same_thread": False}
     )
     Base.metadata.create_all(engine)
-    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    conn = engine.connect()
+    TestingSessionLocal = sessionmaker(bind=conn, autoflush=False, autocommit=False)
+
+    from app.models import DEFAULT_INSTITUTION_ID, Institution
+    import app.core.rate_limit as rl
+
+    rl.reset_for_tests()
+    init_db = TestingSessionLocal()
+    init_db.add(Institution(
+        id=DEFAULT_INSTITUTION_ID,
+        name="Acme University",
+        slug="acme-university",
+        is_active=True,
+    ))
+    init_db.commit()
+    init_db.close()
 
     def override_get_db():
         db = TestingSessionLocal()
@@ -32,15 +47,24 @@ def db_session(monkeypatch):
         finally:
             db.close()
 
-    monkeypatch.setattr(settings, "use_openai", False)
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    monkeypatch.setattr(settings, "groq_api_key", None)
+    monkeypatch.setattr(settings, "gemini_api_key", None)
+    monkeypatch.setattr(settings, "login_rate_limit_per_minute", 0)
     app.dependency_overrides[get_db] = override_get_db
     yield TestingSessionLocal
     app.dependency_overrides.clear()
+    conn.close()
 
 
 @pytest.fixture()
 def client(db_session):
-    return TestClient(app)
+    saved_lifespan = app.router.lifespan_context
+    app.router.lifespan_context = None
+    try:
+        yield TestClient(app, raise_server_exceptions=True)
+    finally:
+        app.router.lifespan_context = saved_lifespan
 
 
 # ---------------------------------------------------------------------------
@@ -63,8 +87,8 @@ def test_register_login_and_me(client):
         },
     )
     assert r.status_code == 201, r.text
-    user = r.json()
-    assert user["username"] == "alice"
+    body = r.json()
+    assert body["user"]["username"] == "alice"
 
     r = client.post(
         "/api/auth/login",

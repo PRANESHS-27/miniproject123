@@ -57,12 +57,12 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     We do the role check inline here instead so admin routes stop
     500-ing.
     """
-    from app.core.permissions import role_value
+    from app.core.permissions import TIER_INSTITUTION_ADMIN, TIER_SUPER_ADMIN, user_tier
 
-    if role_value(user) != "admin":
+    if user_tier(user) not in {TIER_SUPER_ADMIN, TIER_INSTITUTION_ADMIN}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This action requires the admin role.",
+            detail="This action requires an admin role.",
         )
     return user
 
@@ -77,6 +77,8 @@ def _is_admin(user: User) -> bool:
 # Re-export the centralised permission dependency factory. Other modules
 # historically imported it from this module; keep the import path stable.
 from app.core.permissions import require_permission  # noqa: E402
+
+require_super_admin = require_permission("institution", "manage")
 
 
 def get_tenant_context(

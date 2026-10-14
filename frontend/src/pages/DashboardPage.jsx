@@ -70,8 +70,16 @@ export default function DashboardPage() {
   const [, setTick] = useState(0)
   const isDark = useIsDark()
 
+  const [statsError, setStatsError] = useState(false)
+
   const loadStats = useCallback(() => {
-    return vulnApi.dashboard().then(setStats).catch(() => toast.error('Failed to load dashboard'))
+    setStatsError(false)
+    return vulnApi.dashboard()
+      .then(setStats)
+      .catch(() => {
+        setStatsError(true)
+        toast.error('Failed to load dashboard')
+      })
   }, [])
 
   const loadFindingsStats = useCallback(() => {
@@ -126,9 +134,17 @@ export default function DashboardPage() {
     }
   }
 
-  if (!stats) return (
+  if (!stats && !statsError) return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <Spinner label="Loading dashboard…" size="lg" />
+    </div>
+  )
+
+  if (!stats && statsError) return (
+    <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 max-w-md mx-auto my-12">
+      <h3 className="font-bold text-slate-800 dark:text-slate-100">Unable to load security metrics</h3>
+      <p className="text-sm text-slate-500">Could not retrieve dashboard data from backend.</p>
+      <Button variant="primary" size="sm" onClick={loadStats}>Retry Loading</Button>
     </div>
   )
 

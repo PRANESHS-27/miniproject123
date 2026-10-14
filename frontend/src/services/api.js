@@ -137,3 +137,38 @@ export const findings = {
   update: (id, payload) => api.patch(`/api/findings/${id}`, payload).then((r) => r.data),
   acceptRisk: (id, reason) => api.post(`/api/findings/${id}/accept-risk`, { reason }).then((r) => r.data),
 }
+
+// ----- Dashboard Summary -----
+export const dashboard = {
+  summary: () => api.get('/api/dashboard/summary').then((r) => r.data),
+}
+
+// ----- Scans -----
+export const scans = {
+  list: (params) => api.get('/api/scans', { params }).then((r) => r.data),
+  get: (id) => api.get(`/api/scans/${id}`).then((r) => r.data),
+  findings: (id) => api.get(`/api/scans/${id}/findings`).then((r) => r.data),
+  start: (payload) => api.post('/api/scans', payload).then((r) => r.data),
+}
+
+// ----- Alerts -----
+export const alerts = {
+  list: (params) => api.get('/api/alerts', { params }).then((r) => r.data),
+  summary: () => api.get('/api/alerts/summary').then((r) => r.data),
+  acknowledge: (id) => api.post(`/api/alerts/${id}/acknowledge`).then((r) => r.data),
+  dismiss: (id) => api.post(`/api/alerts/${id}/dismiss`).then((r) => r.data),
+}
+
+// ----- Audit Logs -----
+export const auditLogs = {
+  list: (params) => api.get('/api/audit-logs', { params }).then((r) => r.data),
+}
+
+// ----- Institutions -----
+export const institutions = {
+  list: () => api.get('/api/institutions').then((r) => r.data),
+  create: (payload) => api.post('/api/institutions', payload).then((r) => r.data),
+  current: () => api.get('/api/institutions/current').then((r) => r.data),
+  get: (id) => api.get(`/api/institutions/${id}`).then((r) => r.data),
+  update: (id, payload) => api.patch(`/api/institutions/${id}`, payload).then((r) => r.data),
+}

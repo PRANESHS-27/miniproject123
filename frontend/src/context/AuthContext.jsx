@@ -78,15 +78,14 @@ export function AuthProvider({ children }) {
   // StrictMode double-invocation so we don't kick off two concurrent
   // /auth/me calls and race on the response.
   useEffect(() => {
-    if (!user) return
-    if (meRanRef.current) return
-    meRanRef.current = true
-    let cancelled = false
+    if (!user) {
+      setInitializing(false)
+      return
+    }
+    let isCurrent = true
     authApi.me()
       .then((fresh) => {
-        if (cancelled) return
-        // The cached user may be stale; overwrite with the authoritative
-        // version from the server.
+        if (!isCurrent) return
         if (fresh && typeof fresh === 'object') {
           setUser(fresh)
           try {
@@ -95,17 +94,24 @@ export function AuthProvider({ children }) {
         }
       })
       .catch(() => {
-        if (!cancelled) logout()
+        if (!isCurrent) return
+        logout()
       })
       .finally(() => {
-        // Clear the initializing gate regardless of outcome so the router
-        // renders a definite state (either the fresh user, or the login
-        // page) instead of spinning forever.
-        if (!cancelled) setInitializing(false)
+        setInitializing(false)
       })
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+
+    // Safety timeout: never leave initializing true for more than 1.5 seconds
+    const timer = setTimeout(() => {
+      setInitializing(false)
+    }, 1500)
+
+    return () => {
+      isCurrent = false
+      clearTimeout(timer)
+      setInitializing(false)
+    }
+  }, [logout])
 
   // Listen for 401s fired by the axios interceptor. AuthContext is the
   // single source of truth for the user state, so when the token is gone

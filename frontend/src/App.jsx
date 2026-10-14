@@ -15,6 +15,11 @@ import AssetsPage from './pages/AssetsPage.jsx'
 import FindingsPage from './pages/FindingsPage.jsx'
 import AssetDetailPage from './pages/AssetDetailPage.jsx'
 import AdminUsersPage from './pages/AdminUsersPage.jsx'
+import ScansPage from './pages/ScansPage.jsx'
+import AlertsPage from './pages/AlertsPage.jsx'
+import AuditLogsPage from './pages/AuditLogsPage.jsx'
+import InstitutionsPage from './pages/InstitutionsPage.jsx'
+import SettingsPage from './pages/SettingsPage.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 
 function Shell({ children, onOpenSearch }) {
@@ -36,17 +41,15 @@ export default function App() {
   const location = useLocation()
   const [paletteOpen, setPaletteOpen] = useState(false)
 
-  // On cold load with a cached token, show a spinner instead of briefly
-  // redirecting to /login while /auth/me is in flight. This avoids the
-  // login-page flicker when reloading a tab you're already signed into.
-  if (initializing) {
+  // On cold load with a cached token, show a spinner only if user is not yet known
+  if (initializing && !user) {
     return (
       <div
         role="status"
         aria-live="polite"
         className="flex min-h-screen items-center justify-center app-shell-bg"
       >
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-blue-500" />
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-500" />
         <span className="sr-only">Loading…</span>
       </div>
     )
@@ -70,11 +73,17 @@ export default function App() {
           <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
           <Route path="/cve/:cveId" element={<ProtectedRoute><CveDetailPage /></ProtectedRoute>} />
           <Route path="/ai" element={<ProtectedRoute><AiPage /></ProtectedRoute>} />
+          <Route path="/assistant" element={<ProtectedRoute><AiPage /></ProtectedRoute>} />
           <Route path="/reports" element={<RequireRole minTier="security_analyst"><ReportsPage /></RequireRole>} />
           <Route path="/assets" element={<ProtectedRoute><AssetsPage /></ProtectedRoute>} />
           <Route path="/assets/:id" element={<ProtectedRoute><AssetDetailPage /></ProtectedRoute>} />
+          <Route path="/scans" element={<ProtectedRoute><ScansPage /></ProtectedRoute>} />
           <Route path="/findings" element={<ProtectedRoute><FindingsPage /></ProtectedRoute>} />
+          <Route path="/alerts" element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
+          <Route path="/audit-logs" element={<RequireRole minTier="institution_admin"><AuditLogsPage /></RequireRole>} />
+          <Route path="/institutions" element={<RequireRole minTier="super_admin"><InstitutionsPage /></RequireRole>} />
           <Route path="/admin/users" element={<RequireRole roles={['admin']}><AdminUsersPage /></RequireRole>} />
+          <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Shell>
