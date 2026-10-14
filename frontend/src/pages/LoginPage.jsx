@@ -121,9 +121,8 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-        <div className="relative text-xs text-white/70">
-          Default: <code className="px-1.5 py-0.5 bg-white/15 rounded font-mono">admin / Admin@123</code>
-          <span className="ml-2">· change it after first sign in.</span>
+        <div className="relative text-xs text-white/60">
+          Institutional Vulnerability Management &amp; Intelligence Platform
         </div>
       </div>
 
