@@ -51,9 +51,7 @@ class Settings(BaseSettings):
     require_admin_password: bool = False
 
     # ===== Database =====
-    database_url: str = (
-        "postgresql+psycopg2://vulnwatch:vulnwatch@localhost:5432/vulnwatch"
-    )
+    database_url: str = "sqlite:///./vulnwatch.db"
 
     # ===== AI / LLM =====
     openai_api_key: Optional[str] = None
