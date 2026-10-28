@@ -6,6 +6,7 @@ const baseURL = import.meta.env.VITE_API_BASE || ''
 
 export const api = axios.create({
   baseURL,
+  timeout: 10000,
   headers: { 'Content-Type': 'application/json' },
 })
 // Attach JWT to every request when present
@@ -22,8 +23,32 @@ api.interceptors.request.use((config) => {
 // itself decides whether to render the login page based on the auth
 // state, which keeps the redirect out of interceptor side effects.
 api.interceptors.response.use(
-  (r) => r,
+  (r) => {
+    if (
+      typeof r.data === 'string' &&
+      (r.data.trim().startsWith('<!doctype html') || r.data.includes('<html'))
+    ) {
+      const err = new Error(
+        'Backend API endpoint not found. Please verify that your backend server is deployed and VITE_API_BASE is set in Vercel.',
+      )
+      err.response = { status: 502, data: { detail: err.message } }
+      return Promise.reject(err)
+    }
+    return r
+  },
   (err) => {
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      const timeoutErr = new Error('Connection timed out. The backend server is not responding.')
+      timeoutErr.response = { status: 504, data: { detail: timeoutErr.message } }
+      return Promise.reject(timeoutErr)
+    }
+    if (err.message === 'Network Error') {
+      const netErr = new Error(
+        'Cannot reach backend server. Check that the backend is running and CORS is configured, or check VITE_API_BASE.',
+      )
+      netErr.response = { status: 503, data: { detail: netErr.message } }
+      return Promise.reject(netErr)
+    }
     if (err.response?.status === 401) {
       try {
         localStorage.removeItem('vulnwatch_token')

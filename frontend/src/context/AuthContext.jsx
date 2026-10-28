@@ -44,6 +44,9 @@ export function AuthProvider({ children }) {
     setLoading(true)
     try {
       const data = await authApi.login(username, password)
+      if (!data || !data.access_token || !data.user) {
+        throw new Error('Invalid response from server. Check that your backend API is running and reachable.')
+      }
       persist(data.access_token, data.user)
       return data.user
     } finally {
