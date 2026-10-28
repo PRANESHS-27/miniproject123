@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
 import Button from '../components/Button.jsx'
 import { Card } from '../components/Card.jsx'
+import { formatError } from '../utils/format.jsx'
 
 function strength(pwd) {
   if (!pwd) return { score: 0, label: '—' }
@@ -55,15 +56,19 @@ export default function LoginPage() {
     e.preventDefault()
     const username = form.username.trim()
     const email = form.email.trim()
+
     try {
       if (mode === 'login') {
         if (!username) return toast.error('Username is required')
+        if (!form.password) return toast.error('Password is required')
         await login(username, form.password)
         toast.success('Signed in')
         navigate(from, { replace: true })
         return
       }
+
       if (!username || !email) return toast.error('Username and email are required')
+      if (!form.password) return toast.error('Password is required')
       const res = await register({
         username,
         email,
@@ -72,14 +77,14 @@ export default function LoginPage() {
         role: form.role,
       })
       if (res && res.access_token && res.user) {
-        toast.success('Account created — welcome to VulnWatch.')
+        toast.success('Account created — welcome to VulnWatch!')
         navigate(from, { replace: true })
         return
       }
       toast.success('Account created — please sign in.')
       setMode('login')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Authentication failed')
+      toast.error(formatError(err, 'Authentication failed'))
     }
   }
 
@@ -87,13 +92,18 @@ export default function LoginPage() {
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 app-shell-bg">
       {/* Brand panel */}
       <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 opacity-30 pointer-events-none"
-             style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.25), transparent 50%), radial-gradient(circle at 80% 80%, rgba(6,182,212,0.25), transparent 50%)' }}
-             aria-hidden="true" />
+        <div
+          className="absolute inset-0 opacity-30 pointer-events-none"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.25), transparent 50%), radial-gradient(circle at 80% 80%, rgba(6,182,212,0.25), transparent 50%)',
+          }}
+          aria-hidden="true"
+        />
         <div className="relative flex items-center gap-3 text-xl font-bold">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6l-8-4z" />
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               <path d="m9 12 2 2 4-4" />
             </svg>
           </span>
@@ -122,8 +132,7 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="relative text-xs text-white/70">
-          Default: <code className="px-1.5 py-0.5 bg-white/15 rounded font-mono">admin / Admin@123</code>
-          <span className="ml-2">· change it after first sign in.</span>
+          Protected institutional access &bull; Enterprise Vulnerability Management
         </div>
       </div>
 
@@ -145,7 +154,7 @@ export default function LoginPage() {
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
               {mode === 'login'
-                ? 'Welcome back. Use your credentials to continue.'
+                ? 'Welcome back. Enter your credentials to continue.'
                 : 'The first registered user becomes admin automatically.'}
             </p>
 
@@ -160,6 +169,7 @@ export default function LoginPage() {
                   required
                   minLength={3}
                   autoComplete="username"
+                  placeholder="Enter your username"
                 />
               </div>
               {mode === 'register' && (
@@ -174,11 +184,19 @@ export default function LoginPage() {
                       onChange={onChange}
                       required
                       autoComplete="email"
+                      placeholder="name@company.com"
                     />
                   </div>
                   <div>
                     <label className="label">Full name <span className="text-slate-400 font-normal">(optional)</span></label>
-                    <input className="input" name="full_name" value={form.full_name} onChange={onChange} autoComplete="name" />
+                    <input
+                      className="input"
+                      name="full_name"
+                      value={form.full_name}
+                      onChange={onChange}
+                      autoComplete="name"
+                      placeholder="Jane Doe"
+                    />
                   </div>
                   <div>
                     <label className="label">Role</label>
@@ -202,6 +220,7 @@ export default function LoginPage() {
                   onChange={onChange}
                   minLength={8}
                   required
+                  placeholder="••••••••"
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 />
                 {mode === 'register' && (
@@ -228,7 +247,9 @@ export default function LoginPage() {
                     className="text-brand-600 hover:text-brand-700 hover:underline font-medium dark:text-brand-300"
                     onClick={() => setMode('register')}
                     type="button"
-                  >Create an account</button>
+                  >
+                    Create an account
+                  </button>
                 </>
               ) : (
                 <>
@@ -237,7 +258,9 @@ export default function LoginPage() {
                     className="text-brand-600 hover:text-brand-700 hover:underline font-medium dark:text-brand-300"
                     onClick={() => setMode('login')}
                     type="button"
-                  >Sign in</button>
+                  >
+                    Sign in
+                  </button>
                 </>
               )}
             </p>

@@ -6,7 +6,7 @@ import Modal from '../components/Modal.jsx'
 import Spinner from '../components/Spinner.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { institutions as instApi } from '../services/api.js'
-import { formatDateTime } from '../utils/format.jsx'
+import { formatDateTime, formatError } from '../utils/format.jsx'
 import toast from 'react-hot-toast'
 
 export default function InstitutionsPage() {
@@ -44,7 +44,7 @@ export default function InstitutionsPage() {
       setModalOpen(false)
       fetchInstitutions()
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to create institution')
+      toast.error(formatError(err, 'Failed to create institution'))
     } finally {
       setSubmitting(false)
     }

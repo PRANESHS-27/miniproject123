@@ -122,7 +122,7 @@ def match_cves(
                 )
             )
             .order_by(Vulnerability.cvss_v3_score.desc().nullslast())
-            .limit(2000)
+            .limit(250)
         )
         for c in db.execute(strict_stmt).scalars().all():
             products = c.affected_products or []
@@ -145,35 +145,35 @@ def match_cves(
                     _record(c, ap)
                     break
 
-        # ---- 2. Loose (prose match) — limited LIKE scan ----
-        aliases = {product}
-        if product in ("next.js", "nextjs"):
-            aliases |= {"next.js", "nextjs"}
-        # Escape each alias so an asset registered with vendor/product
-        # containing LIKE wildcards can't trigger an unbounded scan.
-        escaped_aliases = [
-            a.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            for a in aliases
-        ]
-        like_pattern = "%" + "%".join(escaped_aliases) + "%"
-        loose_stmt = (
-            select(Vulnerability)
-            .where(
-                or_(
-                    func.lower(func.coalesce(Vulnerability.title, "")).like(like_pattern, escape="\\"),
-                    func.lower(func.coalesce(Vulnerability.description, "")).like(like_pattern, escape="\\"),
+        # ---- 2. Loose (prose match) — fallback only if strict match was sparse ----
+        prod_matches = [m for m in matched.values() if m["bridging"]["product"] == product]
+        if len(prod_matches) < 5:
+            aliases = {product}
+            if product in ("next.js", "nextjs"):
+                aliases |= {"next.js", "nextjs"}
+            escaped_aliases = [
+                a.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                for a in aliases
+            ]
+            like_pattern = "%" + "%".join(escaped_aliases) + "%"
+            loose_stmt = (
+                select(Vulnerability)
+                .where(
+                    or_(
+                        func.lower(func.coalesce(Vulnerability.title, "")).like(like_pattern, escape="\\"),
+                        func.lower(func.coalesce(Vulnerability.description, "")).like(like_pattern, escape="\\"),
+                    )
                 )
+                .order_by(Vulnerability.cvss_v3_score.desc().nullslast())
+                .limit(50)
             )
-            .order_by(Vulnerability.cvss_v3_score.desc().nullslast())
-            .limit(200)
-        )
-        for c in db.execute(loose_stmt).scalars().all():
-            if c.cve_id in matched:
-                continue
-            products = c.affected_products or []
-            if is_cve_excluded(products):
-                continue
-            _record(c, None)
+            for c in db.execute(loose_stmt).scalars().all():
+                if c.cve_id in matched:
+                    continue
+                products = c.affected_products or []
+                if is_cve_excluded(products):
+                    continue
+                _record(c, None)
 
     # Persist AssetCveMatch rows (idempotent on (asset_id, cve_id)).
     # Two safety nets:

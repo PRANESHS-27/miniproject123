@@ -193,7 +193,7 @@ def run_orchestrated_scan(
         # 7. Refresh in-memory index
         try:
             from app.services import cve_index
-            cve_index.refresh(db)
+            cve_index.refresh_asset_stats(db)
         except Exception:
             pass
 

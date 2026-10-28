@@ -6,7 +6,7 @@ import Modal from '../components/Modal.jsx'
 import Spinner from '../components/Spinner.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import Button from '../components/Button.jsx'
-import { formatDate } from '../utils/format.jsx'
+import { formatDate, formatError } from '../utils/format.jsx'
 import { Card, CardBody } from '../components/Card.jsx'
 import { admin } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -14,7 +14,6 @@ import {
   grantableRoles,
   roleBadgeStyle,
   roleLabel,
-  userTier,
 } from '../hooks/permissions.js'
 
 export default function AdminUsersPage() {
@@ -28,7 +27,7 @@ export default function AdminUsersPage() {
     admin.listUsers({ q: q || undefined, limit: 200 })
       .then(setRows)
       .catch((e) => {
-        toast.error(e.response?.data?.detail || 'Failed to load users')
+        toast.error(formatError(e, 'Failed to load users'))
         // Stop the spinner even on error so the user sees the empty
         // state and the retry button instead of an eternal spinner.
         setRows([])
@@ -37,7 +36,7 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     // Debounce search input.
-    const h = setTimeout(load, 250)
+    const h = setTimeout(load, 400)
     return () => clearTimeout(h)
   }, [load])
 
@@ -47,7 +46,7 @@ export default function AdminUsersPage() {
       toast.success(u.is_active ? `${u.username} deactivated` : `${u.username} activated`)
       load()
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Update failed')
+      toast.error(formatError(e, 'Update failed'))
     }
   }
 
@@ -58,7 +57,7 @@ export default function AdminUsersPage() {
       toast.success('User deleted')
       load()
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Delete failed')
+      toast.error(formatError(e, 'Delete failed'))
     }
   }
 
@@ -184,7 +183,7 @@ function CreateUserModal({ onClose, onCreated }) {
       toast.success('User created')
       onCreated()
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Create failed')
+      toast.error(formatError(err, 'Create failed'))
     } finally {
       setBusy(false)
     }
@@ -249,13 +248,14 @@ function CreateUserModal({ onClose, onCreated }) {
 function EditUserModal({ user, onClose, onSaved }) {
   const { user: me } = useAuth()
   const options = grantableRoles(me)
+  const currentRole = user?.role === 'analyst' ? 'security_analyst' : (user?.role === 'admin' ? 'institution_admin' : user?.role)
   // Pre-filter: if the current actor can't grant the user's existing
   // role, hide that option but keep the value as-is (the backend will
   // refuse the change anyway, so it's a no-op edit).
-  const roleOptions = options.includes(user.role)
+  const roleOptions = options.includes(currentRole)
     ? options
-    : [user.role, ...options]
-  const [role, setRole] = useState(user.role)
+    : [currentRole, ...options]
+  const [role, setRole] = useState(currentRole)
   const [isActive, setIsActive] = useState(user.is_active)
   const [busy, setBusy] = useState(false)
 
@@ -267,7 +267,7 @@ function EditUserModal({ user, onClose, onSaved }) {
       toast.success('User updated')
       onSaved()
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Update failed')
+      toast.error(formatError(err, 'Update failed'))
     } finally {
       setBusy(false)
     }

@@ -46,10 +46,10 @@ export default function SearchPage() {
     setSearchParams(next, { replace: false })
   }, [searchParams, setSearchParams])
 
-  // Push inputQ -> URL `q` after 300ms of idleness.
+  // Push inputQ -> URL `q` after 450ms of idleness.
   useEffect(() => {
     if (inputQ === filters.q) return
-    const h = setTimeout(() => updateFilter({ q: inputQ }), 300)
+    const h = setTimeout(() => updateFilter({ q: inputQ }), 450)
     return () => clearTimeout(h)
   }, [inputQ, filters.q, updateFilter])
 

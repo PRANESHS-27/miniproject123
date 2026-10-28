@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import threading
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from sqlalchemy import desc, func
@@ -84,24 +84,17 @@ def ready() -> bool:
 # ---------------------------------------------------------------------------
 # Builders
 # ---------------------------------------------------------------------------
-def _build_excluded(db: Session) -> set[str]:
+def _build_excluded_and_vendor_index(db: Session) -> tuple[set[str], dict[str, set[str]]]:
+    """Single-pass extraction of excluded CVE ids and vendor index over 220k records."""
     excluded_ids: set[str] = set()
-    for cve_id, affected in db.query(
-        Vulnerability.cve_id, Vulnerability.affected_products
-    ).all():
-        if is_cve_excluded(affected):
-            excluded_ids.add(cve_id)
-    return excluded_ids
-
-
-def _build_vendor_index(db: Session) -> dict[str, set[str]]:
-    """vendor_lower -> set of CVE ids that reference it."""
     idx: dict[str, set[str]] = {}
     for cve_id, affected in db.query(
         Vulnerability.cve_id, Vulnerability.affected_products
     ).all():
         if not affected:
             continue
+        if is_cve_excluded(affected):
+            excluded_ids.add(cve_id)
         for prod in affected:
             if not isinstance(prod, dict):
                 continue
@@ -109,6 +102,17 @@ def _build_vendor_index(db: Session) -> dict[str, set[str]]:
             if not v or is_vendor_excluded(v):
                 continue
             idx.setdefault(v, set()).add(cve_id)
+    return excluded_ids, idx
+
+
+def _build_excluded(db: Session) -> set[str]:
+    ex, _ = _build_excluded_and_vendor_index(db)
+    return ex
+
+
+def _build_vendor_index(db: Session) -> dict[str, set[str]]:
+    """vendor_lower -> set of CVE ids that reference it."""
+    _, idx = _build_excluded_and_vendor_index(db)
     return idx
 
 
@@ -244,8 +248,7 @@ def refresh(db: Session, institution_id: int | None = None) -> dict[str, Any]:
     total = db.query(Vulnerability).count()
     kev_count = db.query(Vulnerability).filter(Vulnerability.in_kev.is_(True)).count()
 
-    excluded_ids = _build_excluded(db)
-    vendor_idx = _build_vendor_index(db)
+    excluded_ids, vendor_idx = _build_excluded_and_vendor_index(db)
     top_vendors = _build_global_vendor_counts(vendor_idx)
     asset_v, asset_p = _build_asset_vendor_counts(db, institution_id=institution_id)
     tech = _build_tech_counts(db, institution_id=institution_id)
@@ -320,12 +323,91 @@ def refresh(db: Session, institution_id: int | None = None) -> dict[str, Any]:
         "critical_findings": critical_findings,
         "cves_affecting_us": cves_affecting_us,
         "assets_with_critical": assets_with_critical,
-        "built_at": datetime.utcnow(),
+        "built_at": datetime.now(timezone.utc),
     }
     with _lock:
         _state.clear()
         _state.update(new_state)
     return _state
+
+
+def refresh_asset_stats(db: Session, institution_id: int | None = None) -> dict[str, Any]:
+    """Lightweight refresh that only updates asset/finding counters.
+    Runs in milliseconds and avoids re-scanning 200k+ CVEs on every single asset scan.
+    """
+    if not _state.get("ready"):
+        return refresh(db, institution_id=institution_id)
+
+    asset_v, asset_p = _build_asset_vendor_counts(db, institution_id=institution_id)
+    tech = _build_tech_counts(db, institution_id=institution_id)
+
+    asset_q = db.query(Asset)
+    if institution_id is not None:
+        asset_q = asset_q.filter(Asset.institution_id == institution_id)
+    total_assets = asset_q.count()
+    active_assets = asset_q.filter(Asset.is_active.is_(True)).count()
+
+    finding_q = db.query(AssetFinding)
+    if institution_id is not None:
+        finding_q = finding_q.join(
+            Asset, Asset.id == AssetFinding.asset_id
+        ).filter(Asset.institution_id == institution_id)
+    open_findings = finding_q.filter(AssetFinding.resolved_at.is_(None)).count()
+
+    critical_findings = (
+        finding_q.filter(AssetFinding.resolved_at.is_(None))
+        .filter(AssetFinding.severity == SeverityLevel.CRITICAL)
+        .count()
+    )
+
+    match_q = db.query(func.count(func.distinct(AssetCveMatch.cve_id))).join(
+        Asset, Asset.id == AssetCveMatch.asset_id
+    )
+    if institution_id is not None:
+        match_q = match_q.filter(Asset.institution_id == institution_id)
+    cves_affecting_us = (
+        match_q.filter(Asset.is_active.is_(True)).scalar() or 0
+    )
+    assets_with_critical = (
+        db.query(func.count(func.distinct(AssetFinding.asset_id)))
+        .filter(AssetFinding.resolved_at.is_(None))
+        .filter(AssetFinding.severity == SeverityLevel.CRITICAL)
+        .join(Asset, Asset.id == AssetFinding.asset_id)
+        .filter(Asset.is_active.is_(True))
+        .scalar()
+        or 0
+    )
+    fbt_q = (
+        db.query(AssetFinding.finding_type, func.count(AssetFinding.id))
+        .filter(AssetFinding.resolved_at.is_(None))
+    )
+    if institution_id is not None:
+        fbt_q = fbt_q.join(
+            Asset, Asset.id == AssetFinding.asset_id
+        ).filter(Asset.institution_id == institution_id)
+    findings_by_type_rows = fbt_q.group_by(AssetFinding.finding_type).all()
+    findings_by_type = {
+        (ft.value if hasattr(ft, "value") else str(ft)): count
+        for ft, count in findings_by_type_rows
+    }
+
+    updates = {
+        "asset_top_vendors": asset_v,
+        "asset_top_products": asset_p,
+        "tech_counter": tech,
+        "findings_by_type": findings_by_type,
+        "total_assets": total_assets,
+        "active_assets": active_assets,
+        "open_findings": open_findings,
+        "critical_findings": critical_findings,
+        "cves_affecting_us": cves_affecting_us,
+        "assets_with_critical": assets_with_critical,
+        "built_at": datetime.now(timezone.utc),
+    }
+    with _lock:
+        _state.update(updates)
+    return _state
+
 
 
 def vendor_match(vendor: str) -> set[str]:

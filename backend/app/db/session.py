@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
@@ -21,12 +21,12 @@ _is_sqlite = settings.database_url.startswith(("sqlite",))
 _connect_args: dict = {}
 _engine_kwargs: dict = {}
 if _is_sqlite:
-    _connect_args = {"check_same_thread": False}
-    # SQLite uses a single connection under the hood; ``pool_size`` and
-    # ``max_overflow`` are meaningless. ``StaticPool`` makes that explicit
-    # and avoids ``SingletonThreadPool`` quirks across multiple sessions.
-    from sqlalchemy.pool import StaticPool
-    _engine_kwargs["poolclass"] = StaticPool
+    _connect_args = {"check_same_thread": False, "timeout": 30.0}
+    # StaticPool is only needed for :memory: SQLite to preserve state across connections.
+    # For file-based SQLite, omitting StaticPool allows concurrent connections with WAL.
+    if ":memory:" in settings.database_url:
+        from sqlalchemy.pool import StaticPool
+        _engine_kwargs["poolclass"] = StaticPool
 
 engine = create_engine(
     settings.database_url,
@@ -34,6 +34,22 @@ engine = create_engine(
     connect_args=_connect_args,
     **_engine_kwargs,
 )
+
+if _is_sqlite:
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        try:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA cache_size=-64000")
+            cursor.execute("PRAGMA temp_store=MEMORY")
+            cursor.execute("PRAGMA mmap_size=268435456")
+            cursor.close()
+        except Exception:
+            pass
+
 
 SessionLocal = sessionmaker(
     bind=engine, autocommit=False, autoflush=False, expire_on_commit=False

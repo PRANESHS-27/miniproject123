@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_tenant_context
@@ -33,8 +33,22 @@ def get_dashboard(
     return dashboard_stats(db, institution_id=ctx)
 
 
+def _log_search(user_id: int, query: str, total: int) -> None:
+    from app.db import SessionLocal
+    from app.models import SearchLog
+    db = SessionLocal()
+    try:
+        db.add(SearchLog(user_id=user_id, query=query, result_count=total, source="sql"))
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+
 @router.get("/search", response_model=SearchResponse)
 def search(
+    background_tasks: BackgroundTasks,
     q: Optional[str] = Query(None, description="Free-text query"),
     severity: Optional[str] = None,
     in_kev: Optional[bool] = None,
@@ -56,18 +70,10 @@ def search(
         limit=limit,
         offset=offset,
     )
-    # Log the search query for audit
-    from app.models import SearchLog
+    # Log the search query asynchronously without blocking the response
+    if q:
+        background_tasks.add_task(_log_search, user.id, q, total)
 
-    db.add(
-        SearchLog(
-            user_id=user.id,
-            query=q or "",
-            result_count=total,
-            source="sql",
-        )
-    )
-    db.commit()
     return SearchResponse(
         query=q or "",
         total=total,

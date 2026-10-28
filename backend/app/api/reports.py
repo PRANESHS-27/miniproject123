@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_admin
+from app.core.permissions import require_permission
 from app.db import get_db
 from app.models import User
 from app.services.report_service import generate_csv_report, generate_pdf_report
@@ -32,10 +32,11 @@ def pdf_report(
     severity: str | None = None,
     kev: bool | None = None,
     days: int | None = None,
+    limit: int = Query(500, ge=1, le=5000),
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_permission("report", "generate")),
 ):
-    filename, payload = generate_pdf_report(db, severity=severity, kev=kev, days=days)
+    filename, payload = generate_pdf_report(db, severity=severity, kev=kev, days=days, limit=limit)
     return StreamingResponse(
         _chunked(payload),
         media_type="application/pdf",
@@ -52,10 +53,11 @@ def csv_report(
     severity: str | None = None,
     kev: bool | None = None,
     days: int | None = None,
+    limit: int = Query(5000, ge=1, le=50000),
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_permission("report", "generate")),
 ):
-    filename, payload = generate_csv_report(db, severity=severity, kev=kev, days=days)
+    filename, payload = generate_csv_report(db, severity=severity, kev=kev, days=days, limit=limit)
     return StreamingResponse(
         _chunked(payload),
         media_type="text/csv; charset=utf-8",

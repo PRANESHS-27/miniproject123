@@ -6,16 +6,8 @@ import Spinner from '../components/Spinner.jsx'
 import Button from '../components/Button.jsx'
 import { Card, CardHeader, CardTitle, CardBody } from '../components/Card.jsx'
 import { SeverityBadge } from '../components/Badge.jsx'
-import { formatScore, formatDate } from '../utils/format.jsx'
+import { formatDate } from '../utils/format.jsx'
 import { vulnerabilities as vulnApi } from '../services/api.js'
-
-const SEVERITY_TO_ACCENT = {
-  CRITICAL: 'danger',
-  HIGH: 'warning',
-  MEDIUM: 'amber',
-  LOW: 'success',
-  INFO: 'info',
-}
 
 function CvssRing({ score }) {
   if (score == null) return null
@@ -115,7 +107,6 @@ export default function CveDetailPage() {
   // shorter than the description (otherwise it's redundant).
   const descLen = (data.description || '').length
   const showTitle = data.title && (!data.description || data.title.length < descLen - 20)
-  const accent = SEVERITY_TO_ACCENT[data.severity] || 'slate'
 
   return (
     <div className="space-y-6 animate-fade-in">

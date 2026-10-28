@@ -195,29 +195,29 @@ def start_scheduler() -> None:
 
     _scheduler = BackgroundScheduler(timezone="UTC")
 
-    # Live incremental NVD sync — every 30 minutes
+    # Live incremental NVD sync — every 30 minutes (starts after 5 min so startup is instant)
     _scheduler.add_job(
         _nvd_incremental_job,
         IntervalTrigger(minutes=30),
         id="nvd_incremental",
         replace_existing=True,
-        next_run_time=datetime.now(timezone.utc),  # run immediately on startup
+        next_run_time=datetime.now(timezone.utc) + timedelta(minutes=5),
     )
 
-    # CISA KEV — every 6 hours
+    # CISA KEV — every 6 hours (starts after 15 min)
     _scheduler.add_job(
         _kev_job,
         IntervalTrigger(hours=6),
         id="kev_refresh",
         replace_existing=True,
-        next_run_time=datetime.now(timezone.utc),
+        next_run_time=datetime.now(timezone.utc) + timedelta(minutes=15),
     )
 
-    # First-run backfill — runs once on startup, then is removed
+    # First-run backfill — runs once on startup after 10s, then is removed
     _scheduler.add_job(
         _bootstrap_job,
         "date",
-        run_date=datetime.now(timezone.utc),
+        run_date=datetime.now(timezone.utc) + timedelta(seconds=10),
         id="bootstrap_sync",
     )
 

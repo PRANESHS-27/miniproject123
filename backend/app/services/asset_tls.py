@@ -9,6 +9,7 @@ Checks (when reachable):
 
 from __future__ import annotations
 
+import asyncio
 import socket
 import ssl
 from datetime import datetime, timezone
@@ -45,9 +46,10 @@ async def probe_tls(url: str, *, timeout: float = 5.0) -> list[dict[str, Any]]:
         return findings
 
     ctx = _make_context(ssl.TLSVersion.TLSv1_2)
+    loop = asyncio.get_running_loop()
     try:
-        sock = socket.create_connection((host, port), timeout=timeout)
-    except OSError as exc:
+        sock = await loop.run_in_executor(None, lambda: socket.create_connection((host, port), timeout=timeout))
+    except (OSError, Exception) as exc:
         findings.append({
             "finding_type": "tls",
             "severity": "HIGH",

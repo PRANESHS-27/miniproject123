@@ -285,7 +285,8 @@ class TestReadinessPayload:
         cve_index._state["ready"] = True
         cve_index._state["total_cves"] = 12345
         cve_index._state["kev_count"] = 42
-        cve_index._state["built_at"] = _dt.utcnow()
+        from datetime import timezone as _tz
+        cve_index._state["built_at"] = _dt.now(_tz.utc)
 
         token = _login(client, "superadmin", "superpass")
         res = client.get("/api/health/status", headers=_auth(token))
@@ -442,7 +443,8 @@ class TestHealthIntegratesSchedulerStatus:
         cve_index._state["ready"] = True
         cve_index._state["total_cves"] = 12345
         cve_index._state["kev_count"] = 42
-        cve_index._state["built_at"] = _dt.utcnow()
+        from datetime import timezone as _tz
+        cve_index._state["built_at"] = _dt.now(_tz.utc)
 
         token = _login(client, "superadmin", "superpass")
         res = client.get("/api/health/status", headers=_auth(token))

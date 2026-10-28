@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ssl
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
@@ -22,25 +23,22 @@ from app.services.vendor_filter import (
 logger = get_logger(__name__)
 
 
-def _ssl_verify() -> bool | str:
+def _ssl_verify() -> bool | str | ssl.SSLContext:
     """Return the value httpx wants for ``verify=``.
 
     Resolution order (driven by ``settings.ssl_verify``):
-      - empty string                 -> use system trust store (True)
-      - ``"true"`` / ``"1"`` / ``"yes"`` / ``"on"`` / ``"default"`` -> True
-      - ``"false"`` / ``"0"`` / ``"no"`` / ``"off"``           -> disable
-      - any other value                                          -> treat as
-        path to a CA bundle (returned verbatim to httpx).
-
-    Note: skipping verification is only safe on trusted networks. Set
-    ``SSL_VERIFY=false`` only if your operator is intercepting TLS with a
-    custom root that isn't in Python's certifi bundle.
+      - empty string / true / default -> use system trust store (SSLContext with default certs)
+      - ``"false"`` / ``"0"`` / ``"no"`` / ``"off"`` -> disable verification
+      - any other value -> treat as path to a CA bundle (returned verbatim to httpx).
     """
     v = (settings.ssl_verify or "").strip()
-    if not v:
-        return True
-    if v.lower() in ("true", "1", "yes", "on", "default", "system"):
-        return True
+    if not v or v.lower() in ("true", "1", "yes", "on", "default", "system"):
+        try:
+            ctx = ssl.create_default_context()
+            ctx.load_default_certs()
+            return ctx
+        except Exception:
+            return True
     if v.lower() in ("false", "0", "no", "off"):
         return False
     return v  # treat as path to a CA bundle
@@ -288,7 +286,7 @@ async def fetch_all_cves(db: Session, max_pages: int | None = None) -> dict[str,
 
 
 def _upsert_nvd(db: Session, records: Iterable[dict[str, Any] | None]) -> tuple[int, int]:
-    inserted = updated = 0
+    valid_recs: list[dict[str, Any]] = []
     for rec in records:
         if not rec:
             continue
@@ -301,7 +299,21 @@ def _upsert_nvd(db: Session, records: Iterable[dict[str, Any] | None]) -> tuple[
         cleaned = filter_affected_products(products)
         if cleaned:
             rec["affected_products"] = cleaned
-        existing = db.query(Vulnerability).filter_by(cve_id=rec["cve_id"]).one_or_none()
+        valid_recs.append(rec)
+
+    if not valid_recs:
+        return 0, 0
+
+    cve_ids = [r["cve_id"] for r in valid_recs]
+    # Single batch query to find existing rows instead of thousands of individual queries
+    existing_map = {
+        v.cve_id: v
+        for v in db.query(Vulnerability).filter(Vulnerability.cve_id.in_(cve_ids)).all()
+    }
+
+    inserted = updated = 0
+    for rec in valid_recs:
+        existing = existing_map.get(rec["cve_id"])
         if existing:
             for key, val in rec.items():
                 setattr(existing, key, val)

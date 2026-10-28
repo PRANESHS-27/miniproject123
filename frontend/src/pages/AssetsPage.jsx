@@ -7,7 +7,7 @@ import Modal from '../components/Modal.jsx'
 import Button from '../components/Button.jsx'
 import Spinner from '../components/Spinner.jsx'
 import { Card, CardBody } from '../components/Card.jsx'
-import { formatDate, formatShortDate } from '../utils/format.jsx'
+import { formatShortDate, formatError } from '../utils/format.jsx'
 import { assets as assetsApi } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { can } from '../hooks/permissions.js'
@@ -69,7 +69,7 @@ export default function AssetsPage() {
       toast.success(r.message || 'Scan started')
       setTimeout(load, 4000)
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Scan failed')
+      toast.error(formatError(e, 'Scan failed'))
     } finally {
       setScanningId(null)
     }
@@ -82,7 +82,7 @@ export default function AssetsPage() {
       toast.success('Asset deactivated')
       load()
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Delete failed')
+      toast.error(formatError(e, 'Delete failed'))
     }
   }
 
@@ -269,7 +269,7 @@ function AddAssetModal({ onClose, onCreated }) {
       toast.success('Asset created')
       onCreated()
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Create failed')
+      toast.error(formatError(e, 'Create failed'))
     } finally {
       setBusy(false)
     }

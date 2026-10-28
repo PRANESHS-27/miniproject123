@@ -26,6 +26,8 @@ backend/htmlcov/
 
 # database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 postgres-data/
 

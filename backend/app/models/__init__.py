@@ -43,7 +43,8 @@ class Role(str, enum.Enum):
 
     SUPER_ADMIN = "super_admin"
     INSTITUTION_ADMIN = "institution_admin"
-    ANALYST = "analyst"  # wire value also used by ``SECURITY_ANALYST`` alias
+    ANALYST = "analyst"  # legacy wire value
+    SECURITY_ANALYST = "security_analyst"  # canonical wire value
     VIEWER = "viewer"
     # Legacy "admin" — wire value preserved for backward compatibility.
     # Semantically equal to INSTITUTION_ADMIN; ``normalize_role`` maps.
@@ -63,6 +64,7 @@ _ROLE_TO_TIER: dict[str, str] = {
     Role.INSTITUTION_ADMIN.value: TIER_INSTITUTION_ADMIN,
     Role.ADMIN.value: TIER_INSTITUTION_ADMIN,  # legacy alias
     Role.ANALYST.value: TIER_SECURITY_ANALYST,
+    Role.SECURITY_ANALYST.value: TIER_SECURITY_ANALYST,
     Role.VIEWER.value: TIER_VIEWER,
 }
 

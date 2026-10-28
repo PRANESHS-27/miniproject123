@@ -18,7 +18,7 @@ import Spinner from '../components/Spinner.jsx'
 import { Card, CardHeader, CardTitle, CardSubtitle, CardBody } from '../components/Card.jsx'
 import { SeverityBadge } from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
-import { formatScore, formatNumber, formatShortDate } from '../utils/format.jsx'
+import { formatScore, formatNumber, formatShortDate, formatError } from '../utils/format.jsx'
 import { vulnerabilities as vulnApi, sync as syncApi, findings as findingsApi } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { can } from '../hooks/permissions.js'
@@ -109,7 +109,7 @@ export default function DashboardPage() {
       setSyncMeta({ kind, at: new Date() })
       setTimeout(() => { loadStats(); loadFindingsStats() }, 8000)
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Sync failed')
+      toast.error(formatError(e, 'Sync failed'))
     } finally {
       setSyncing(false)
       setSyncKind(null)
@@ -127,7 +127,7 @@ export default function DashboardPage() {
       setSyncMeta({ kind: 'kev', at: new Date() })
       setTimeout(() => { loadStats(); loadFindingsStats() }, 6000)
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'KEV sync failed')
+      toast.error(formatError(e, 'KEV sync failed'))
     } finally {
       setSyncing(false)
       setSyncKind(null)

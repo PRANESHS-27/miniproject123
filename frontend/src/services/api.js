@@ -72,10 +72,23 @@ export const reports = {
       Object.entries(params || {}).filter(([, v]) => v !== '' && v !== null && v !== undefined)
     )
     const url = `/api/reports/${kind}`
-    const response = await api.get(url, {
-      params: cleanParams,
-      responseType: 'blob',
-    })
+    let response
+    try {
+      response = await api.get(url, {
+        params: cleanParams,
+        responseType: 'blob',
+      })
+    } catch (err) {
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text()
+          err.response.data = JSON.parse(text)
+        } catch {
+          /* keep blob */
+        }
+      }
+      throw err
+    }
     // Pull the filename out of the Content-Disposition header.
     const disp = response.headers['content-disposition'] || ''
     const m = /filename="([^"]+)"/.exec(disp)

@@ -7,7 +7,6 @@
 // race that hits the search page when a user types fast).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api } from '../services/api.js'
 
 export default function useApi(fetcher, deps = []) {
   const [data, setData] = useState(null)
@@ -46,7 +45,6 @@ export default function useApi(fetcher, deps = []) {
     return () => {
       controller.abort('useApi cleanup')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, ...deps])
 
   return { data, error, loading, refetch }

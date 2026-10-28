@@ -65,9 +65,12 @@ def generate_csv_report(
     severity: str | None = None,
     kev: bool | None = None,
     days: int | None = None,
+    limit: int = 10000,
 ) -> tuple[str, bytes]:
     """Build a CSV in memory. Returns (filename, bytes)."""
     q = _filtered_query(db, severity, kev, days)
+    if limit:
+        q = q.limit(limit)
 
     buf = StringIO()
     w = csv.writer(buf)
@@ -82,7 +85,6 @@ def generate_csv_report(
             "Affected Products",
         ]
     )
-    # yield_per bounds memory even when the filtered set is large.
     for r in q.yield_per(1000):
         d = _row_payload(r)
         w.writerow(
@@ -112,57 +114,78 @@ def generate_pdf_report(
     kev: bool | None = None,
     days: int | None = None,
     title: str = "Vulnerability Report",
+    limit: int = 500,
 ) -> tuple[str, bytes]:
-    """Build a PDF in memory. Returns (filename, bytes)."""
+    """Build a high-performance, cleanly formatted PDF in memory. Returns (filename, bytes)."""
     q = _filtered_query(db, severity, kev, days)
+    total_matches = q.count()
 
     buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter, title=title)
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=letter,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36,
+        title=title,
+    )
     styles = getSampleStyleSheet()
+
+    # Criteria description for header
+    kev_str = "Yes" if kev is True else ("No" if kev is False else "Any")
+    filter_desc = f"Severity: {severity or 'ALL'}  |  KEV: {kev_str}  |  Timeframe: {f'Last {days} days' if days else 'All time'}"
+
     story = [
         Paragraph(title, styles["Title"]),
         Paragraph(
-            f"Generated: {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}",
+            f"Generated: {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}  &bull;  {filter_desc}",
             styles["Normal"],
         ),
-        Spacer(1, 12),
+        Spacer(1, 8),
     ]
 
-    data = [["CVE", "Severity", "CVSS", "Published", "Title"]]
-    count = 0
-    for r in q.yield_per(1000):
+    rows = q.limit(limit).all()
+    count = len(rows)
+
+    if total_matches > count:
+        summary_msg = f"Matching records in database: <b>{total_matches:,}</b> (Displaying top {count:,} most recent entries below)"
+    else:
+        summary_msg = f"Total matching records: <b>{total_matches:,}</b>"
+    story.append(Paragraph(summary_msg, styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    data = [["CVE ID", "Severity", "CVSS", "Published", "Title"]]
+    for r in rows:
         d = _row_payload(r)
-        data.append(
-            [
-                d["cve_id"],
-                d["severity"],
-                f"{d['cvss']:.1f}" if d["cvss"] is not None else "-",
-                d["published"].strftime("%Y-%m-%d") if d["published"] else "",
-                d["title"][:60],
-            ]
-        )
-        count += 1
-    story.insert(1, Paragraph(f"{count} record(s)", styles["Normal"]))
+        pub_str = d["published"].strftime("%Y-%m-%d") if d["published"] else ""
+        cvss_str = f"{d['cvss']:.1f}" if d["cvss"] is not None else "-"
+        raw_title = d["title"] or ""
+        short_title = (raw_title[:55] + "…") if len(raw_title) > 55 else raw_title
+        data.append([d["cve_id"], d["severity"], cvss_str, pub_str, short_title])
 
     if count:
-        table = Table(data, repeatRows=1)
+        table = Table(data, colWidths=[90, 60, 45, 75, 270], repeatRows=1)
         table.setStyle(
             TableStyle(
                 [
                     ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f2937")),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d1d5db")),
                     ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9fafb")]),
                     ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ]
             )
         )
         story.append(table)
     else:
-        story.append(Paragraph("No vulnerabilities matched the filters.", styles["Italic"]))
+        story.append(Paragraph("No vulnerabilities matched the selected filters.", styles["Italic"]))
 
     doc.build(story)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     fname = f"vuln-report-{stamp}-{uuid.uuid4().hex[:8]}.pdf"
     return fname, buf.getvalue()
+

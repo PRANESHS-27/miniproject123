@@ -11,7 +11,7 @@ import Button from '../components/Button.jsx'
 import { FindingBadge, SeverityBadge } from '../components/Badge.jsx'
 import { Card, CardHeader, CardTitle, CardBody } from '../components/Card.jsx'
 import { Table, THead, TBody, Tr, Th, Td } from '../components/Table.jsx'
-import { formatDate, formatShortDate, formatScore } from '../utils/format.jsx'
+import { formatDate, formatShortDate, formatScore, formatError } from '../utils/format.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { can } from '../hooks/permissions.js'
 
@@ -43,6 +43,8 @@ export default function AssetDetailPage() {
   const [scans, setScans] = useState(null)
   const [filterType, setFilterType] = useState('')
   const [filterSev, setFilterSev] = useState('')
+  const [filterStatus, setFilterStatus] = useState('open')
+  const [resolvingId, setResolvingId] = useState(null)
   const [scanning, setScanning] = useState(false)
   const [latestScanId, setLatestScanId] = useState(null)
 
@@ -91,6 +93,7 @@ export default function AssetDetailPage() {
       const params = {}
       if (filterType) params.type = filterType
       if (filterSev) params.severity = filterSev
+      if (filterStatus) params.status = filterStatus
       setFindings(null) // clear stale entries so the spinner reflects the new filter
       api.get(`/api/assets/${id}/findings`, { params, signal: controller.signal })
         .then((r) => setFindings(r.data))
@@ -106,7 +109,7 @@ export default function AssetDetailPage() {
         .then((r) => setScans((r.data || []).filter((s) => String(s.asset_id) === String(id))))
         .catch(handleErr)
     }
-  }, [tab, id, filterType, filterSev])
+  }, [tab, id, filterType, filterSev, filterStatus])
 
   // Polling lifecycle — single interval on mount; cleanup is a real return.
   const pollHandleRef = useRef(null)
@@ -167,22 +170,29 @@ export default function AssetDetailPage() {
         }
       }, POLL_INTERVAL_MS)
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Scan failed')
+      toast.error(formatError(e, 'Scan failed'))
       setScanning(false)
     }
   }
 
   const onResolve = async (fid) => {
+    if (resolvingId) return
+    setResolvingId(fid)
     try {
       await assetsApi.resolveFinding(id, fid)
       toast.success('Finding marked resolved')
-      const params = {}
-      if (filterType) params.type = filterType
-      if (filterSev) params.severity = filterSev
-      assetsApi.findings(id, params).then(setFindings)
+      // Immediate local state update so the user gets instant visual confirmation:
+      // button converts to the green "Resolved" badge immediately.
+      setFindings((prev) => (prev || []).map((f) => (f.id === fid ? { ...f, resolved_at: new Date().toISOString() } : f)))
+      setAsset((prev) => prev ? {
+        ...prev,
+        open_findings_count: Math.max(0, (prev.open_findings_count || 1) - 1),
+      } : prev)
       loadAsset()
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Resolve failed')
+      toast.error(formatError(e, 'Resolve failed'))
+    } finally {
+      setResolvingId(null)
     }
   }
 
@@ -230,10 +240,13 @@ export default function AssetDetailPage() {
           findings={findings}
           isAdmin={canResolve}
           onResolve={onResolve}
+          resolvingId={resolvingId}
           filterType={filterType}
           setFilterType={setFilterType}
           filterSev={filterSev}
           setFilterSev={setFilterSev}
+          filterStatus={filterStatus}
+          setFilterStatus={setFilterStatus}
         />
       )}
       {tab === 'cves' && <CvesTab cves={cves} />}
@@ -354,13 +367,29 @@ function TechsTab({ technologies, onScan, scanning, lastScannedAt }) {
   )
 }
 
-function FindingsTab({ findings, isAdmin, onResolve, filterType, setFilterType, filterSev, setFilterSev }) {
+function FindingsTab({
+  findings,
+  isAdmin,
+  onResolve,
+  resolvingId,
+  filterType,
+  setFilterType,
+  filterSev,
+  setFilterSev,
+  filterStatus,
+  setFilterStatus,
+}) {
   return (
     <div className="space-y-3">
       <Card>
         <CardBody className="p-3 flex flex-wrap gap-2 items-center">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mr-1">Filter</span>
-          <select className="input max-w-[180px]" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+          <select className="input max-w-[160px]" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="open">Open findings</option>
+            <option value="resolved">Resolved findings</option>
+            <option value="all">All findings</option>
+          </select>
+          <select className="input max-w-[160px]" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
             <option value="">All types</option>
             <option value="tls">TLS</option>
             <option value="header">Headers</option>
@@ -368,7 +397,7 @@ function FindingsTab({ findings, isAdmin, onResolve, filterType, setFilterType, 
             <option value="js_lib">JS libraries</option>
             <option value="cve">CVE</option>
           </select>
-          <select className="input max-w-[180px]" value={filterSev} onChange={(e) => setFilterSev(e.target.value)}>
+          <select className="input max-w-[160px]" value={filterSev} onChange={(e) => setFilterSev(e.target.value)}>
             <option value="">All severities</option>
             <option value="CRITICAL">Critical</option>
             <option value="HIGH">High</option>
@@ -376,8 +405,8 @@ function FindingsTab({ findings, isAdmin, onResolve, filterType, setFilterType, 
             <option value="LOW">Low</option>
             <option value="INFO">Info</option>
           </select>
-          {(filterType || filterSev) && (
-            <Button variant="ghost" size="sm" onClick={() => { setFilterType(''); setFilterSev('') }}>
+          {(filterType || filterSev || filterStatus !== 'open') && (
+            <Button variant="ghost" size="sm" onClick={() => { setFilterType(''); setFilterSev(''); setFilterStatus('open') }}>
               Clear
             </Button>
           )}
@@ -414,10 +443,20 @@ function FindingsTab({ findings, isAdmin, onResolve, filterType, setFilterType, 
                     </p>
                   </div>
                   {isAdmin && !f.resolved_at && (
-                    <Button variant="secondary" size="sm" onClick={() => onResolve(f.id)}>Resolve</Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      loading={resolvingId === f.id}
+                      disabled={resolvingId === f.id}
+                      onClick={() => onResolve(f.id)}
+                    >
+                      Resolve
+                    </Button>
                   )}
                   {f.resolved_at && (
-                    <span className="badge bg-success-50 text-success-700 border-success-200 dark:bg-success-950/40 dark:text-success-300 dark:border-success-800/60">Resolved</span>
+                    <span className="badge bg-success-50 text-success-700 border-success-200 dark:bg-success-950/40 dark:text-success-300 dark:border-success-800/60">
+                      Resolved
+                    </span>
                   )}
                 </div>
               </CardBody>

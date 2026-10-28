@@ -56,45 +56,64 @@ def _enum_value(value) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
-def _hydrate(finding: Finding, db: Session) -> FindingOut:
-    """Build a FindingOut with the joined fields the UI expects.
+def _hydrate_many(findings: list[Finding], db: Session) -> list[FindingOut]:
+    """Batch-hydrate a list of findings using 3 IN queries instead of
+    3 individual queries per finding (fixes N+1 query performance)."""
+    if not findings:
+        return []
 
-    Done in Python (rather than a JOIN) because the list endpoint can
-    return 100s of rows and a single bulk join over three tables is
-    more expensive than a handful of indexed lookups.
-    """
-    asset = db.get(Asset, finding.asset_id)
-    vuln = (
-        db.query(Vulnerability)
-        .filter(Vulnerability.cve_id == finding.vulnerability_cve_id)
-        .first()
+    asset_ids = {f.asset_id for f in findings if f.asset_id}
+    cve_ids = {f.vulnerability_cve_id for f in findings if f.vulnerability_cve_id}
+    user_ids = {f.assigned_to_id for f in findings if f.assigned_to_id}
+
+    asset_map = (
+        {a.id: a for a in db.query(Asset).filter(Asset.id.in_(asset_ids)).all()}
+        if asset_ids else {}
     )
-    assigned = (
-        db.get(User, finding.assigned_to_id) if finding.assigned_to_id else None
+    vuln_map = (
+        {v.cve_id: v for v in db.query(Vulnerability).filter(Vulnerability.cve_id.in_(cve_ids)).all()}
+        if cve_ids else {}
     )
-    return FindingOut(
-        id=finding.id,
-        asset_id=finding.asset_id,
-        vulnerability_cve_id=finding.vulnerability_cve_id,
-        technology_id=finding.technology_id,
-        risk_score=finding.risk_score,
-        risk_label=_enum_value(finding.risk_label),
-        risk_contributions=finding.risk_contributions or {},
-        status=_enum_value(finding.status),
-        assigned_to_id=finding.assigned_to_id,
-        due_date=finding.due_date,
-        notes=finding.notes,
-        source=finding.source,
-        created_at=finding.created_at,
-        updated_at=finding.updated_at,
-        resolved_at=finding.resolved_at,
-        asset_label=asset.label if asset else None,
-        asset_url=asset.url if asset else None,
-        cve_title=vuln.title if vuln else None,
-        cve_severity=_enum_value(vuln.severity) if vuln else None,
-        cve_cvss_v3_score=vuln.cvss_v3_score if vuln else None,
-        assigned_to_username=assigned.username if assigned else None,
+    user_map = (
+        {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+        if user_ids else {}
     )
+
+    out: list[FindingOut] = []
+    for finding in findings:
+        asset = asset_map.get(finding.asset_id)
+        vuln = vuln_map.get(finding.vulnerability_cve_id)
+        assigned = user_map.get(finding.assigned_to_id) if finding.assigned_to_id else None
+        out.append(FindingOut(
+            id=finding.id,
+            asset_id=finding.asset_id,
+            vulnerability_cve_id=finding.vulnerability_cve_id,
+            technology_id=finding.technology_id,
+            risk_score=finding.risk_score,
+            risk_label=_enum_value(finding.risk_label),
+            risk_contributions=finding.risk_contributions or {},
+            status=_enum_value(finding.status),
+            assigned_to_id=finding.assigned_to_id,
+            due_date=finding.due_date,
+            notes=finding.notes,
+            source=finding.source,
+            created_at=finding.created_at,
+            updated_at=finding.updated_at,
+            resolved_at=finding.resolved_at,
+            asset_label=asset.label if asset else None,
+            asset_url=asset.url if asset else None,
+            cve_title=vuln.title if vuln else None,
+            cve_severity=_enum_value(vuln.severity) if vuln else None,
+            cve_cvss_v3_score=vuln.cvss_v3_score if vuln else None,
+            assigned_to_username=assigned.username if assigned else None,
+        ))
+    return out
+
+
+def _hydrate(finding: Finding, db: Session) -> FindingOut:
+    """Build a FindingOut with the joined fields the UI expects for a single item."""
+    items = _hydrate_many([finding], db)
+    return items[0]
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +178,7 @@ def list_findings(
         .all()
     )
     return FindingListResponse(
-        items=[_hydrate(f, db) for f in items],
+        items=_hydrate_many(items, db),
         total=total,
         page=page,
         page_size=page_size,

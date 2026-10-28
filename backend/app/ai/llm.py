@@ -46,7 +46,7 @@ _AVAST_PEM = os.path.join(_BACKEND_ROOT, "certs", "avast-root.pem")
 
 
 def _ssl_context() -> ssl.SSLContext:
-    """Build a context that trusts certifi + the local Avast PEM (if any).
+    """Build a context that trusts system roots + certifi + the local Avast PEM (if any).
 
     Override via ``LLM_CA_BUNDLE`` (PEM path). Disable verification only
     with ``LLM_INSECURE=true`` (debugging only — never enable by default).
@@ -58,6 +58,10 @@ def _ssl_context() -> ssl.SSLContext:
         return ctx
     explicit = os.environ.get("LLM_CA_BUNDLE", "").strip()
     ctx = ssl.create_default_context(cafile=explicit or _DEFAULT_CA)
+    try:
+        ctx.load_default_certs()
+    except Exception:
+        pass
     # Add the local Avast root on top of certifi. ``load_verify_locations``
     # is a no-op if the file doesn't exist, so this is safe in
     # environments without Avast too.
@@ -291,43 +295,45 @@ def _gemini_chat_structured(question: str, context: str, structured: dict[str, A
         raise RuntimeError(f"Unexpected Gemini response: {data}") from exc
 
 
-def _groq_chat(question: str, context: str) -> str:
-    """Groq — OpenAI-compatible hosted inference. Free tier at https://console.groq.com/keys.
-
-    Groq is the fastest free inference available (Llama 3.1 8B runs at
-    ~500 tok/s on their LPU hardware). The API mirrors OpenAI's
-    ``/v1/chat/completions`` endpoint, so we just point at a different
-    base URL.
-    """
+def _call_groq(messages: list[dict[str, str]]) -> str:
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {settings.groq_api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": settings.groq_model,
-        "messages": _messages(question, context),
-        "temperature": 0.2,
-        "max_tokens": 600,
-    }
-    data = _post_json(url, payload, headers)
-    return data["choices"][0]["message"]["content"].strip()
+    candidate_models = [settings.groq_model, "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
+    seen = set()
+    last_err = None
+    for model in candidate_models:
+        if not model or model in seen:
+            continue
+        seen.add(model)
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.2,
+            "max_tokens": 600,
+        }
+        try:
+            data = _post_json(url, payload, headers)
+            return data["choices"][0]["message"]["content"].strip()
+        except RuntimeError as exc:
+            last_err = exc
+            if "404" in str(exc) or "model" in str(exc).lower():
+                log.warning("Groq model '%s' unavailable, trying candidate: %s", model, exc)
+                continue
+            raise
+    if last_err:
+        raise last_err
+    raise RuntimeError("Groq request failed")
+
+
+def _groq_chat(question: str, context: str) -> str:
+    return _call_groq(_messages(question, context))
 
 
 def _groq_chat_structured(question: str, context: str, structured: dict[str, Any]) -> str:
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {settings.groq_api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": settings.groq_model,
-        "messages": _structured_messages(question, context, structured),
-        "temperature": 0.2,
-        "max_tokens": 600,
-    }
-    data = _post_json(url, payload, headers)
-    return data["choices"][0]["message"]["content"].strip()
+    return _call_groq(_structured_messages(question, context, structured))
 
 
 def _ollama_chat(question: str, context: str) -> str:

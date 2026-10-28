@@ -24,7 +24,7 @@ const ROLE_ALIASES = {
 // Tier ordering — higher index = higher privilege.
 const TIER_ORDER = ['viewer', 'security_analyst', 'institution_admin', 'super_admin']
 
-function tierIndex(t) {
+export function tierIndex(t) {
   const canonical = ROLE_ALIASES[t] || t
   const idx = TIER_ORDER.indexOf(canonical)
   return idx === -1 ? 0 : idx

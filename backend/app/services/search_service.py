@@ -42,19 +42,21 @@ def search_vulnerabilities(
         q = q.filter(~Vulnerability.cve_id.in_(excluded_ids))
 
     if query:
-        # Split into per-term ANDs so "microsoft 2025" matches rows that
-        # contain both words anywhere, rather than the exact phrase as one
-        # LIKE. Each term still ORs across title / description / cve_id.
-        terms = [t for t in query.lower().split() if t]
+        # Split into per-term ANDs. If term starts with CVE-, use direct index prefix scan.
+        terms = [t for t in query.strip().split() if t]
         for term in terms:
-            pat = f"%{term}%"
-            q = q.filter(
-                or_(
-                    func.lower(Vulnerability.cve_id).like(pat),
-                    func.lower(func.coalesce(Vulnerability.title, "")).like(pat),
-                    func.lower(func.coalesce(Vulnerability.description, "")).like(pat),
+            clean = term.strip()
+            if clean.upper().startswith("CVE-"):
+                q = q.filter(Vulnerability.cve_id.like(f"{clean.upper()}%"))
+            else:
+                pat = f"%{clean}%"
+                q = q.filter(
+                    or_(
+                        Vulnerability.cve_id.like(pat),
+                        Vulnerability.title.like(pat),
+                        Vulnerability.description.like(pat),
+                    )
                 )
-            )
 
     if severity:
         try:
@@ -75,7 +77,10 @@ def search_vulnerabilities(
         since = datetime.now(timezone.utc) - timedelta(days=days)
         q = q.filter(Vulnerability.published >= since)
 
-    total = q.count()
+    if not query and not severity and in_kev is None and not vendor and not days:
+        total = cve_index.get().get("total_cves") or db.query(func.count(Vulnerability.id)).scalar() or 0
+    else:
+        total = q.count()
     rows = (
         q.order_by(desc(Vulnerability.published))
         .offset(offset)

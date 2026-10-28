@@ -10,6 +10,7 @@ import { Table, THead, TBody, Tr, Th, Td } from '../components/Table.jsx'
 import { findings as findingsApi } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { can } from '../hooks/permissions.js'
+import { formatError } from '../utils/format.jsx'
 
 // Stable display order so the risk filter and the badge colours always
 // line up with the dashboard's risk-distribution widget.
@@ -64,7 +65,7 @@ export default function FindingsPage() {
       setResults(list)
       setStats(s)
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load findings')
+      toast.error(formatError(e, 'Failed to load findings'))
     } finally {
       setLoading(false)
     }
@@ -89,9 +90,8 @@ export default function FindingsPage() {
   useEffect(() => {
     const t = setTimeout(() => {
       if (inputQ !== filters.q) updateFilter({ q: inputQ })
-    }, 350)
+    }, 450)
     return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputQ])
 
   const changeStatus = async (f, newStatus) => {
@@ -102,7 +102,7 @@ export default function FindingsPage() {
       toast.success(`Finding ${f.vulnerability_cve_id} → ${newStatus}`)
       load()
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Update failed')
+      toast.error(formatError(e, 'Update failed'))
     } finally {
       setBusyId(null)
     }
@@ -119,7 +119,7 @@ export default function FindingsPage() {
       setAcceptReason('')
       load()
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Accept-risk failed')
+      toast.error(formatError(e, 'Accept-risk failed'))
     } finally {
       setBusyId(null)
     }

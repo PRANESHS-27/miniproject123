@@ -179,12 +179,46 @@ def _retrieve(db: Session, question: str, query_type: str, cve_ids: list[str]) -
     """Return (rows, source). ``source`` is ``"exact" | "vector" | "sql"``."""
     if query_type == "exact_cve":
         return _exact_cve_lookup(db, cve_ids), "exact"
+
+    # If explicit CVE IDs are mentioned in natural language, exact lookup is authoritative if found.
+    if cve_ids:
+        rows = _exact_cve_lookup(db, cve_ids)
+        if rows:
+            return rows, "exact"
+
+    # 2. Vector search via ChromaDB if available.
     if _chroma_available():
         rows = _vector_search(question, _CONTEXT_LIMIT)
         if rows:
             return rows, "vector"
         log.info("Vector search returned no rows; falling back to SQL")
-    rows, _total = search_vulnerabilities(db, query=question, limit=_CONTEXT_LIMIT)
+
+    # 3. SQL keyword search with stop-word and KEV filtering.
+    stop_words = {
+        "what", "is", "are", "which", "show", "tell", "about", "me", "how", "do",
+        "does", "i", "we", "can", "fix", "mitigate", "the", "a", "an", "in", "from",
+        "for", "with", "and", "or", "to", "of", "recent", "vulnerabilities",
+        "vulnerability", "details", "cve", "cves", "please", "give", "summarize",
+        "find", "list", "lookup", "any", "all",
+    }
+    raw_words = [w.strip("?,.!:;\"'()[]{}") for w in question.lower().split()]
+    in_kev = True if any(w in ("kev", "cisa") for w in raw_words) else None
+    terms = [w for w in raw_words if w and w not in stop_words and w not in ("cisa", "kev")]
+
+    if terms:
+        clean_query = " ".join(terms)
+        rows, total = search_vulnerabilities(db, query=clean_query, in_kev=in_kev, limit=_CONTEXT_LIMIT)
+        if rows:
+            return rows, "sql"
+        # If combined terms return 0 results and there are multiple terms, try individual terms
+        if len(terms) > 1:
+            for term in terms:
+                rows, total = search_vulnerabilities(db, query=term, in_kev=in_kev, limit=_CONTEXT_LIMIT)
+                if rows:
+                    return rows, "sql"
+
+    # Fallback to literal query string
+    rows, _total = search_vulnerabilities(db, query=question, in_kev=in_kev, limit=_CONTEXT_LIMIT)
     return rows, "sql"
 
 

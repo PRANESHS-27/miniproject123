@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import PageHeader from '../components/PageHeader.jsx'
-import Spinner from '../components/Spinner.jsx'
 import Button from '../components/Button.jsx'
 import { Card, CardBody } from '../components/Card.jsx'
 import { SeverityBadge } from '../components/Badge.jsx'
@@ -43,9 +42,9 @@ export default function AiPage() {
       const data = await aiApi.ask(query)
       if (reqId !== reqRef.current) return
       setAnswer({ question: query, ...data })
-    } catch (e) {
+    } catch {
       if (reqId !== reqRef.current) return
-      toast.error('AI request failed — check that OPENAI_API_KEY / OLLAMA is configured.')
+      toast.error('AI request failed — check that OPENAI_API_KEY / GROQ_API_KEY is configured.')
       setAnswer(null)
     } finally {
       if (reqId === reqRef.current) setLoading(false)

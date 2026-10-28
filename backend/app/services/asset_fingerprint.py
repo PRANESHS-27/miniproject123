@@ -23,6 +23,7 @@ which is wrong.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 from urllib.parse import urlparse
@@ -259,14 +260,20 @@ async def fingerprint_asset(
         except httpx.HTTPError:
             body = ""
 
-        # opportunistic ancillary fetches — failures are fine
-        for label, sub in [("robots_txt", "robots.txt"), ("sitemap_xml", "sitemap.xml")]:
+        # opportunistic ancillary fetches concurrently — failures are fine
+        async def _fetch_ancillary(label: str, sub: str) -> None:
             try:
                 rr = await client.get(f"{base}/{sub}")
                 if rr.status_code == 200:
                     probed_meta[label] = rr.text[:50_000]
-            except httpx.HTTPError:
+            except (httpx.HTTPError, Exception):
                 pass
+
+        await asyncio.gather(
+            _fetch_ancillary("robots_txt", "robots.txt"),
+            _fetch_ancillary("sitemap_xml", "sitemap.xml"),
+            return_exceptions=True,
+        )
 
     # 1. Header signatures
     for sig in HEADER_SIGNATURES:
@@ -335,33 +342,36 @@ async def probe_paths(
     verify: bool | str = False,
     max_concurrency: int = 5,
 ) -> dict[str, dict[str, Any]]:
-    """HEAD-then-GET each path. Returns ``{path: {status, redirected, length}}``."""
-    import asyncio
-
+    """HEAD-then-GET each path using a shared client pool. Returns ``{path: {status, redirected, length}}``."""
     parsed = urlparse(url)
     base = f"{parsed.scheme}://{parsed.netloc}"
 
     sem = asyncio.Semaphore(max_concurrency)
     results: dict[str, dict[str, Any]] = {}
+    path_timeout = min(timeout, 3.5)
+    limits = httpx.Limits(max_keepalive_connections=max_concurrency, max_connections=max_concurrency * 2)
 
-    async def _probe(path: str) -> None:
-        async with sem:
-            target = base + path
-            try:
-                async with httpx.AsyncClient(
-                    timeout=timeout, follow_redirects=False, verify=verify
-                ) as c:
-                    r = await c.head(target)
+    async with httpx.AsyncClient(
+        timeout=path_timeout,
+        follow_redirects=False,
+        verify=verify,
+        limits=limits,
+    ) as client:
+        async def _probe(path: str) -> None:
+            async with sem:
+                target = base + path
+                try:
+                    r = await client.head(target)
                     if r.status_code in (405, 403):
-                        r = await c.get(target)
+                        r = await client.get(target)
                     results[path] = {
                         "status": r.status_code,
                         "redirected": bool(r.is_redirect),
                         "location": r.headers.get("location"),
                         "length": len(r.content or b""),
                     }
-            except httpx.HTTPError as exc:
-                results[path] = {"status": None, "error": str(exc)[:120]}
+                except (httpx.HTTPError, asyncio.TimeoutError, Exception) as exc:
+                    results[path] = {"status": None, "error": str(exc)[:120]}
 
-    await asyncio.gather(*[_probe(p) for p in paths], return_exceptions=True)
+        await asyncio.gather(*[_probe(p) for p in paths], return_exceptions=True)
     return results

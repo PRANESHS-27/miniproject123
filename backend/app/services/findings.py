@@ -142,12 +142,66 @@ def upsert_from_match(
 def upsert_many(
     db: Session, matches: Iterable[AssetCveMatch], source: str = "scan"
 ) -> list[Finding]:
-    """Bulk variant of ``upsert_from_match`` for the asset scan path."""
+    """Bulk variant of ``upsert_from_match`` for the asset scan path.
+    Pre-loads assets, vulnerabilities, and open findings in batch queries
+    to avoid N+1 query slowdowns during asset scans.
+    """
+    match_list = list(matches)
+    if not match_list:
+        return []
+
+    asset_ids = {m.asset_id for m in match_list}
+    if not asset_ids:
+        return []
+
+    assets_by_id = {a.id: a for a in db.query(Asset).filter(Asset.id.in_(asset_ids)).all()}
+    cve_ids = {m.cve_id for m in match_list}
+    vulns_by_cve = {v.cve_id: v for v in db.query(Vulnerability).filter(Vulnerability.cve_id.in_(cve_ids)).all()}
+
+    active_statuses = (
+        FindingStatus.OPEN,
+        FindingStatus.IN_PROGRESS,
+        FindingStatus.VERIFIED,
+    )
+    open_findings = (
+        db.query(Finding)
+        .filter(
+            Finding.asset_id.in_(asset_ids),
+            Finding.vulnerability_cve_id.in_(cve_ids),
+            Finding.status.in_(active_statuses),
+        )
+        .all()
+    )
+    open_by_key = {(f.asset_id, f.vulnerability_cve_id): f for f in open_findings}
+
+    now = utcnow_naive()
     out: list[Finding] = []
-    for m in matches:
-        f = upsert_from_match(db, m, source=source)
-        if f is not None:
-            out.append(f)
+    for m in match_list:
+        asset = assets_by_id.get(m.asset_id)
+        if asset is None:
+            continue
+        vuln = vulns_by_cve.get(m.cve_id)
+        existing = open_by_key.get((asset.id, m.cve_id))
+        if existing is not None:
+            _apply_risk(existing, asset, vuln)
+            existing.technology_id = m.technology_id
+            existing.source = source
+            existing.updated_at = now
+            out.append(existing)
+        else:
+            finding = Finding(
+                asset_id=asset.id,
+                vulnerability_cve_id=m.cve_id,
+                technology_id=m.technology_id,
+                status=FindingStatus.OPEN,
+                source=source,
+                created_at=now,
+                updated_at=now,
+            )
+            _apply_risk(finding, asset, vuln)
+            db.add(finding)
+            open_by_key[(asset.id, m.cve_id)] = finding
+            out.append(finding)
     return out
 
 

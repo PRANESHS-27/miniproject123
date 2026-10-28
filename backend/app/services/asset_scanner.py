@@ -359,9 +359,9 @@ def scan_one_asset(
         # dashboard stays stale until the next scheduled refresh.
         try:
             from app.services import cve_index
-            cve_index.refresh(db)
+            cve_index.refresh_asset_stats(db)
         except Exception as exc:  # pragma: no cover - never fail a scan over the cache
-            logger.warning("cve_index refresh after scan failed: %s", exc)
+            logger.warning("cve_index refresh_asset_stats after scan failed: %s", exc)
         logger.info(
             "Asset scan OK: id=%d url=%s techs=%d new=%d re_seen=%d closed=%d cves=%d",
             asset.id, asset.url, len(tech_rows), inserted, re_seen, closed, len(matched),

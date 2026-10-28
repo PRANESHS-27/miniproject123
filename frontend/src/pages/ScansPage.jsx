@@ -8,7 +8,7 @@ import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { assets as assetsApi, scans as scansApi } from '../services/api.js'
-import { formatDateTime } from '../utils/format.jsx'
+import { formatDateTime, formatError } from '../utils/format.jsx'
 import toast from 'react-hot-toast'
 
 export default function ScansPage() {
@@ -35,7 +35,7 @@ export default function ScansPage() {
       const res = await scansApi.list(params)
       setScansList(res.items || [])
       setTotalScans(res.total || 0)
-    } catch (err) {
+    } catch {
       toast.error('Failed to load scan jobs')
     } finally {
       setLoading(false)
@@ -80,8 +80,7 @@ export default function ScansPage() {
       setModalOpen(false)
       fetchScans()
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Failed to start scan'
-      toast.error(msg)
+      toast.error(formatError(err, 'Failed to start scan'))
     } finally {
       setSubmitting(false)
     }

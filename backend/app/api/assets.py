@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from sqlalchemy import desc, func
+from sqlalchemy import case, desc, func
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -61,41 +61,70 @@ router = APIRouter(prefix="/api/assets", tags=["assets"])
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+def _assets_to_list_items(db: Session, assets: list[Asset]) -> list[AssetListItem]:
+    """Compute summary counts for a batch of assets using 2 grouped queries
+    instead of 3 individual queries per asset (fixes O(N) queries)."""
+    if not assets:
+        return []
+    asset_ids = [a.id for a in assets]
+
+    # Batch open findings count and critical findings count
+    finding_counts = (
+        db.query(
+            AssetFinding.asset_id,
+            func.count(AssetFinding.id).label("total_open"),
+            func.sum(case((AssetFinding.severity == SeverityLevel.CRITICAL, 1), else_=0)).label("critical_open"),
+        )
+        .filter(
+            AssetFinding.asset_id.in_(asset_ids),
+            AssetFinding.resolved_at.is_(None),
+        )
+        .group_by(AssetFinding.asset_id)
+        .all()
+    )
+    open_map = {r[0]: (r[1] or 0, r[2] or 0) for r in finding_counts}
+
+    # Batch distinct CVE match count
+    cve_counts = (
+        db.query(
+            AssetCveMatch.asset_id,
+            func.count(func.distinct(AssetCveMatch.cve_id)).label("cves_count"),
+        )
+        .filter(AssetCveMatch.asset_id.in_(asset_ids))
+        .group_by(AssetCveMatch.asset_id)
+        .all()
+    )
+    cve_map = {r[0]: (r[1] or 0) for r in cve_counts}
+
+    out = []
+    for asset in assets:
+        open_count, critical_count = open_map.get(asset.id, (0, 0))
+        cves_count = cve_map.get(asset.id, 0)
+        out.append(AssetListItem(
+            id=asset.id,
+            label=asset.label,
+            url=asset.url,
+            env=asset.env,
+            is_active=asset.is_active,
+            tags=asset.tags or [],
+            created_at=asset.created_at,
+            last_scanned_at=asset.last_scanned_at,
+            last_scan_status=asset.last_scan_status,
+            open_findings_count=open_count,
+            critical_findings_count=critical_count,
+            cves_matched_count=cves_count,
+            criticality=(asset.criticality.value
+                         if hasattr(asset.criticality, "value")
+                         else str(asset.criticality or "LOW")),
+            internet_exposed=bool(asset.internet_exposed),
+        ))
+    return out
+
+
 def _asset_to_list_item(db: Session, asset: Asset) -> AssetListItem:
-    """Compute summary counts without heavy joins."""
-    open_q = db.query(AssetFinding).filter(
-        AssetFinding.asset_id == asset.id,
-        AssetFinding.resolved_at.is_(None),
-    )
-    open_count = open_q.count()
-    critical_count = (
-        open_q.filter(AssetFinding.severity == SeverityLevel.CRITICAL).count()
-    )
-    cves_count = (
-        db.query(func.count(func.distinct(AssetCveMatch.cve_id)))
-        .filter(AssetCveMatch.asset_id == asset.id)
-        .scalar()
-        or 0
-    )
-    return AssetListItem(
-        id=asset.id,
-        label=asset.label,
-        url=asset.url,
-        env=asset.env,
-        is_active=asset.is_active,
-        tags=asset.tags or [],
-        created_at=asset.created_at,
-        last_scanned_at=asset.last_scanned_at,
-        last_scan_status=asset.last_scan_status,
-        open_findings_count=open_count,
-        critical_findings_count=critical_count,
-        cves_matched_count=cves_count,
-        # Phase 4 — Risk Engine inputs
-        criticality=(asset.criticality.value
-                     if hasattr(asset.criticality, "value")
-                     else str(asset.criticality or "LOW")),
-        internet_exposed=bool(asset.internet_exposed),
-    )
+    """Compute summary counts for a single asset."""
+    items = _assets_to_list_items(db, [asset])
+    return items[0]
 
 
 def _asset_to_detail(db: Session, asset: Asset) -> AssetOut:
@@ -188,7 +217,7 @@ def list_assets(
     if not include_inactive:
         q = q.filter(Asset.is_active.is_(True))
     rows = q.order_by(Asset.label.asc()).all()
-    return [_asset_to_list_item(db, a) for a in rows]
+    return _assets_to_list_items(db, rows)
 
 
 @router.get("/stats", response_model=AssetStats)
@@ -227,7 +256,7 @@ def get_asset_stats(
 @router.get("/scans/recent", response_model=list[AssetScanOut])
 def recent_scans(
     db: Session = Depends(get_db),
-    _user: User = Depends(require_admin),
+    _user: User = Depends(get_current_user),
     ctx: int | None = Depends(get_tenant_context),
     limit: int = Query(50, ge=1, le=200),
 ):
@@ -285,7 +314,7 @@ def update_asset(
     if "is_active" in data or "env" in data:
         try:
             from app.services import cve_index
-            cve_index.refresh(db)
+            cve_index.refresh_asset_stats(db)
         except Exception:  # pragma: no cover
             pass
     # Risk Engine: if criticality or internet_exposed changed, every
@@ -320,7 +349,7 @@ def delete_asset(
     # an asset is deactivated — refresh so the dashboard reflects it.
     try:
         from app.services import cve_index
-        cve_index.refresh(db)
+        cve_index.refresh_asset_stats(db)
     except Exception:  # pragma: no cover
         pass
     return {"status": "ok", "asset_id": asset_id, "is_active": False}
@@ -406,6 +435,7 @@ def list_findings(
     ctx: int | None = Depends(get_tenant_context),
     type: Optional[str] = Query(None, description="Filter by finding_type"),
     severity: Optional[str] = Query(None),
+    status: Optional[str] = Query(None, description="Filter by status: open, resolved, all"),
     include_resolved: bool = Query(False),
 ):
     # RBAC 22 — confirm the asset is visible to the caller's tenant
@@ -421,8 +451,13 @@ def list_findings(
         AssetFinding,
         ctx=ctx,
     )
-    if not include_resolved:
+    if status == "resolved":
+        q = q.filter(AssetFinding.resolved_at.is_not(None))
+    elif status == "all" or include_resolved:
+        pass
+    else:
         q = q.filter(AssetFinding.resolved_at.is_(None))
+
     if type:
         try:
             q = q.filter(AssetFinding.finding_type == FindingType(type))
@@ -474,13 +509,32 @@ def resolve_finding(
     if not f:
         raise HTTPException(status_code=404, detail="Finding not found")
     f.resolved_at = datetime.now(timezone.utc)
+
+    # Also resolve matching Finding in the institutional findings table if present
+    cve_id = None
+    if f.details and isinstance(f.details, dict):
+        cve_id = f.details.get("cve_id")
+    if not cve_id and f.title.startswith("CVE-"):
+        cve_id = f.title.split()[0]
+    if cve_id:
+        from app.models import Finding, FindingStatus
+        from app.core.time import utcnow_naive
+        inst_finding = (
+            db.query(Finding)
+            .filter(Finding.asset_id == asset_id, Finding.vulnerability_cve_id == cve_id)
+            .one_or_none()
+        )
+        if inst_finding:
+            inst_finding.status = FindingStatus.RESOLVED
+            inst_finding.resolved_at = utcnow_naive()
+
     db.commit()
     # The dashboard's open_findings / critical_findings counters come from
-    # the in-memory cve_index snapshot. Refresh it so the user sees the
-    # number drop on the next dashboard request rather than next reload.
+    # the in-memory cve_index snapshot. Refresh fast asset stats (30ms) so the
+    # user sees the number drop on the next dashboard request rather than next reload.
     try:
         from app.services import cve_index
-        cve_index.refresh(db)
+        cve_index.refresh_asset_stats(db)
     except Exception:  # pragma: no cover - never fail a resolve over the cache
         pass
     return {"status": "ok", "finding_id": finding_id}

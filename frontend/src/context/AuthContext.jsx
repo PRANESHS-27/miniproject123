@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { auth as authApi } from '../services/api.js'
 
 const AuthContext = createContext(null)
@@ -29,7 +29,6 @@ export function AuthProvider({ children }) {
   const [initializing, setInitializing] = useState(
     () => readCachedUser() !== null,
   )
-  const meRanRef = useRef(false)
 
   const persist = useCallback((token, userObj) => {
     try {
