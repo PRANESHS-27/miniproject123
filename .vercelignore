@@ -1,0 +1,13 @@
+# Ignore backend and non-frontend services for Vercel deployment
+backend/
+ai/
+scheduler/
+database/
+docker/
+kubernetes/
+docs/
+reports/
+logs/
+*.db
+*.db-shm
+*.db-wal
